@@ -1,22 +1,119 @@
 import { Calendar, DollarSign, User, Clock, Star, ChevronRight, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
-const upcomingAppointments = [
-  { date: "2/7/26", time: "10:00 AM", doctor: "Dr. Carsonian", location: "InterHills Health", starred: true },
-  { date: "3/15/26", time: "2:30 PM", doctor: "Dr. George", location: "City Medical Center", starred: false },
-];
+interface Appointment {
+  appt_id: number;
+  date_time: string;
+  status: string;
+  user_notes: string | null;
+  healthcare_providers: {
+    full_name: string;
+    facility_name: string;
+  };
+}
 
-const pastAppointments = [
-  { date: "2/20/25", time: "9:00 AM", doctor: "Dr. George", location: "City Medical Center" },
-  { date: "1/5/26", time: "11:00 AM", doctor: "Dr. Danger", location: "Westside Clinic" },
-  { date: "12/23/25", time: "3:00 PM", doctor: "Dr. J.E. Barber-Howell", location: "InterHills Health" },
+const timeSlots = [
+  "9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM",
+  "11:00 AM", "11:30 AM", "1:00 PM", "1:30 PM",
+  "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM",
+  "4:00 PM", "4:30 PM",
 ];
 
 const Dashboard = () => {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
+  const [newDate, setNewDate] = useState<Date | undefined>();
+  const [newTime, setNewTime] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
-  const nextAppt = upcomingAppointments[0];
+  const fetchAppointments = async () => {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)")
+      .eq("user_id", 1)
+      .order("date_time", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching appointments:", error);
+      return;
+    }
+    setAppointments((data as unknown as Appointment[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
+
+  const upcoming = appointments.filter((a) => a.status === "scheduled");
+  const past = appointments.filter((a) => a.status === "completed");
+  const nextAppt = upcoming[0];
+
+  const openReschedule = (appt: Appointment) => {
+    setSelectedAppt(appt);
+    setNewDate(new Date(appt.date_time));
+    setNewTime(format(new Date(appt.date_time), "h:mm a"));
+    setRescheduleOpen(true);
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedAppt || !newDate || !newTime) return;
+    setSaving(true);
+
+    // Parse time string into hours/minutes
+    const [timePart, ampm] = newTime.split(" ");
+    const [hourStr, minStr] = timePart.split(":");
+    let hours = parseInt(hourStr);
+    if (ampm === "PM" && hours !== 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+
+    const updatedDate = new Date(newDate);
+    updatedDate.setHours(hours, parseInt(minStr), 0, 0);
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .update({ date_time: updatedDate.toISOString() })
+      .eq("appt_id", selectedAppt.appt_id)
+      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+
+    setSaving(false);
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to reschedule appointment.", variant: "destructive" });
+      console.error(error);
+      return;
+    }
+
+    // Update local state with the returned row
+    if (data && data.length > 0) {
+      setAppointments((prev) =>
+        prev.map((a) => (a.appt_id === selectedAppt.appt_id ? (data[0] as unknown as Appointment) : a))
+      );
+    }
+
+    setRescheduleOpen(false);
+    toast({ title: "Rescheduled!", description: `Appointment moved to ${format(updatedDate, "M/d/yy 'at' h:mm a")}` });
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-6 flex items-center justify-center min-h-[50vh]">
+        <p className="text-muted-foreground">Loading appointments...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
@@ -55,27 +152,32 @@ const Dashboard = () => {
       </div>
 
       {/* Next Appointment Card */}
-      <div className="glass-card rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Calendar className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Next Appointment</h2>
+      {nextAppt && (
+        <div className="glass-card rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Calendar className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Next Appointment</h2>
+          </div>
+          <div className="text-center py-3">
+            <p className="text-lg font-bold text-foreground">
+              {format(new Date(nextAppt.date_time), "M/d/yy")}, {format(new Date(nextAppt.date_time), "h:mm a")}
+            </p>
+            <p className="text-sm text-muted-foreground">{nextAppt.healthcare_providers.full_name}</p>
+            <p className="text-xs text-muted-foreground">{nextAppt.healthcare_providers.facility_name}</p>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => openReschedule(nextAppt)}
+              className="flex-1 text-sm py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
+            >
+              Reschedule
+            </button>
+            <button className="flex-1 text-sm py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors">
+              Cancel
+            </button>
+          </div>
         </div>
-        <div className="text-center py-3">
-          <p className="text-lg font-bold text-foreground">
-            {nextAppt.date}, {nextAppt.time}
-          </p>
-          <p className="text-sm text-muted-foreground">{nextAppt.doctor}</p>
-          <p className="text-xs text-muted-foreground">{nextAppt.location}</p>
-        </div>
-        <div className="flex gap-2 mt-3">
-          <button className="flex-1 text-sm py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity">
-            Reschedule
-          </button>
-          <button className="flex-1 text-sm py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors">
-            Cancel
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Appointments Tabs */}
       <div>
@@ -103,22 +205,24 @@ const Dashboard = () => {
         </div>
 
         <div className="space-y-2">
-          {(tab === "upcoming" ? upcomingAppointments : pastAppointments).map((appt, i) => (
+          {(tab === "upcoming" ? upcoming : past).map((appt) => (
             <div
-              key={i}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-card border border-border hover:shadow-sm transition-shadow"
+              key={appt.appt_id}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-card border border-border hover:shadow-sm transition-shadow cursor-pointer"
+              onClick={() => tab === "upcoming" ? openReschedule(appt) : undefined}
             >
-              {tab === "upcoming" && (
-                <Star
-                  className={`w-4 h-4 shrink-0 ${
-                    "starred" in appt && appt.starred ? "text-warning fill-warning" : "text-muted-foreground"
-                  }`}
-                />
+              {tab === "upcoming" ? (
+                <Star className="w-4 h-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
               )}
-              {tab === "past" && <Clock className="w-4 h-4 text-muted-foreground shrink-0" />}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{appt.date}</p>
-                <p className="text-xs text-muted-foreground truncate">{appt.doctor}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {format(new Date(appt.date_time), "M/d/yy")}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {appt.healthcare_providers.full_name}
+                </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
@@ -131,6 +235,55 @@ const Dashboard = () => {
         <Plus className="w-4 h-4" />
         Schedule an Appointment
       </button>
+
+      {/* Reschedule Dialog */}
+      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reschedule Appointment</DialogTitle>
+            {selectedAppt && (
+              <p className="text-sm text-muted-foreground">
+                {selectedAppt.healthcare_providers.full_name} at {selectedAppt.healthcare_providers.facility_name}
+              </p>
+            )}
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Select new date</p>
+              <CalendarPicker
+                mode="single"
+                selected={newDate}
+                onSelect={setNewDate}
+                disabled={(date) => date < new Date()}
+                className={cn("p-3 pointer-events-auto rounded-md border")}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Select new time</p>
+              <Select value={newTime} onValueChange={setNewTime}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeSlots.map((slot) => (
+                    <SelectItem key={slot} value={slot}>
+                      {slot}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleReschedule} disabled={saving || !newDate || !newTime}>
+              {saving ? "Saving..." : "Confirm Reschedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
