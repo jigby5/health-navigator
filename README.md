@@ -102,8 +102,13 @@ Go to [app.supabase.com](https://app.supabase.com) and create a new project. Wai
 **Step 4 — Apply the schema and seed data**
 
 In the Supabase SQL Editor:
-1. Open the file at `supabase/migrations/` in this repo and run the `.sql` migration file. This creates all tables and row-level security (RLS) policies the app requires. Alternatively, run `schema.sql` manually and apply the RLS policies from the migration file, or use the [Supabase CLI](https://supabase.com/docs/guides/cli) and run `supabase db push`.
-2. Run `seed.sql` in the SQL Editor to insert demo data — including the demo user (Chad), providers, plans, appointments, and articles.
+1. Open the local `schema.sql` file from the project root, copy all of its contents, paste them into a **new query**, and click **Run**. This creates all tables the app requires.
+2. Open the local `seed.sql` file, copy all of its contents, paste them into another **new query**, and click **Run**. This inserts demo data — including the demo user (Chad), providers, plans, appointments, and articles.
+
+If you ever need to **completely reset** the Supabase database for this project, you can:
+
+- Use the Supabase SQL Editor to drop and recreate the `public` schema (see the class instructions or your Supabase project notes for the exact script), and then
+- Re‑run `schema.sql` followed by `seed.sql` as in the steps above.
 
 **Step 5 — Configure environment variables**
 

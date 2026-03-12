@@ -18,7 +18,7 @@ interface Appointment {
   healthcare_providers: {
     full_name: string;
     facility_name: string;
-  };
+  } | null;
 }
 
 const timeSlots = [
@@ -32,6 +32,7 @@ const Dashboard = () => {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
   const [newDate, setNewDate] = useState<Date | undefined>();
@@ -39,18 +40,40 @@ const Dashboard = () => {
   const [saving, setSaving] = useState(false);
 
   const fetchAppointments = async () => {
-    const { data, error } = await supabase
-      .from("appointments")
-      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)")
-      .eq("user_id", 1)
-      .order("date_time", { ascending: true });
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)")
+        .order("date_time", { ascending: true });
 
-    if (error) {
-      console.error("Error fetching appointments:", error);
-      return;
+      if (error) {
+        console.error("Error fetching appointments:", error);
+        setAppointments([]);
+        setLoadError(error.message);
+        toast({
+          title: "Couldn’t load appointments",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setAppointments((data as unknown as Appointment[]) || []);
+    } catch (e) {
+      console.error("Unexpected error fetching appointments:", e);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      setAppointments([]);
+      setLoadError(message);
+      toast({
+        title: "Couldn’t load appointments",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-    setAppointments((data as unknown as Appointment[]) || []);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -123,6 +146,13 @@ const Dashboard = () => {
         <p className="text-sm text-muted-foreground mt-1">Here's your health overview</p>
       </div>
 
+      {loadError && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <p className="text-sm font-medium text-destructive">Appointments failed to load</p>
+          <p className="text-xs text-muted-foreground mt-1 break-words">{loadError}</p>
+        </div>
+      )}
+
       {/* Quick Actions Row */}
       <div className="grid grid-cols-2 gap-3">
         <Link
@@ -162,8 +192,12 @@ const Dashboard = () => {
             <p className="text-lg font-bold text-foreground">
               {format(new Date(nextAppt.date_time), "M/d/yy")}, {format(new Date(nextAppt.date_time), "h:mm a")}
             </p>
-            <p className="text-sm text-muted-foreground">{nextAppt.healthcare_providers.full_name}</p>
-            <p className="text-xs text-muted-foreground">{nextAppt.healthcare_providers.facility_name}</p>
+            <p className="text-sm text-muted-foreground">
+              {nextAppt.healthcare_providers?.full_name ?? "Unknown provider"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {nextAppt.healthcare_providers?.facility_name ?? "Unknown facility"}
+            </p>
           </div>
           <div className="flex gap-2 mt-3">
             <button
@@ -221,7 +255,7 @@ const Dashboard = () => {
                   {format(new Date(appt.date_time), "M/d/yy")}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {appt.healthcare_providers.full_name}
+                  {appt.healthcare_providers?.full_name ?? "Unknown provider"}
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -243,7 +277,8 @@ const Dashboard = () => {
             <DialogTitle>Reschedule Appointment</DialogTitle>
             {selectedAppt && (
               <p className="text-sm text-muted-foreground">
-                {selectedAppt.healthcare_providers.full_name} at {selectedAppt.healthcare_providers.facility_name}
+                {(selectedAppt.healthcare_providers?.full_name ?? "Unknown provider")} at{" "}
+                {(selectedAppt.healthcare_providers?.facility_name ?? "Unknown facility")}
               </p>
             )}
           </DialogHeader>
