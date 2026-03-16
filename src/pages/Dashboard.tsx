@@ -252,11 +252,18 @@ const Dashboard = () => {
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">
-                  {format(new Date(appt.date_time), "M/d/yy")}
+                  {tab === "upcoming"
+                    ? `${format(new Date(appt.date_time), "M/d/yy")} at ${format(new Date(appt.date_time), "h:mm a")}`
+                    : format(new Date(appt.date_time), "M/d/yy")}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {appt.healthcare_providers?.full_name ?? "Unknown provider"}
                 </p>
+                {tab === "upcoming" && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {appt.healthcare_providers?.facility_name ?? "Unknown facility"}
+                  </p>
+                )}
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
