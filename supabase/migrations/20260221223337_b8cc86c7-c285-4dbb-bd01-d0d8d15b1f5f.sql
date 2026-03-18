@@ -100,3 +100,4 @@ CREATE POLICY "Allow public update on appointments" ON public.appointments FOR U
 CREATE POLICY "Allow public read on articles" ON public.articles FOR SELECT USING (true);
 CREATE POLICY "Allow public read on user_articles" ON public.user_articles FOR SELECT USING (true);
 CREATE POLICY "Allow public read on ai_chats" ON public.ai_chats FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on appointments" ON public.appointments FOR INSERT WITH CHECK (true);

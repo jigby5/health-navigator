@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface Appointment {
   appt_id: number;
@@ -19,6 +20,13 @@ interface Appointment {
     full_name: string;
     facility_name: string;
   } | null;
+}
+
+interface Provider {
+  doctor_id: number;
+  full_name: string;
+  facility_name: string;
+  specialty: string;
 }
 
 const timeSlots = [
@@ -38,6 +46,14 @@ const Dashboard = () => {
   const [newDate, setNewDate] = useState<Date | undefined>();
   const [newTime, setNewTime] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
+  const [scheduleTime, setScheduleTime] = useState<string>("");
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
+  const [scheduleNotes, setScheduleNotes] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [apptToCancel, setApptToCancel] = useState<Appointment | null>(null);
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -76,8 +92,33 @@ const Dashboard = () => {
     }
   };
 
+  const openCancelDialog = (appt: Appointment) => {
+    setApptToCancel(appt);
+    setCancelOpen(true);
+  };
+
+  const fetchProviders = async () => {
+    const { data, error } = await supabase
+      .from("healthcare_providers")
+      .select("doctor_id, full_name, facility_name, specialty")
+      .order("full_name", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching providers:", error);
+      toast({
+        title: "Couldn’t load providers",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setProviders(data || []);
+  };
+
   useEffect(() => {
     fetchAppointments();
+    fetchProviders();
   }, []);
 
   const upcoming = appointments.filter((a) => a.status === "scheduled");
@@ -89,6 +130,14 @@ const Dashboard = () => {
     setNewDate(new Date(appt.date_time));
     setNewTime(format(new Date(appt.date_time), "h:mm a"));
     setRescheduleOpen(true);
+  };
+
+  const openScheduleDialog = () => {
+    setSelectedDoctorId("");
+    setScheduleDate(undefined);
+    setScheduleTime("");
+    setScheduleNotes("");
+    setScheduleOpen(true);
   };
 
   const handleReschedule = async () => {
@@ -128,6 +177,105 @@ const Dashboard = () => {
 
     setRescheduleOpen(false);
     toast({ title: "Rescheduled!", description: `Appointment moved to ${format(updatedDate, "M/d/yy 'at' h:mm a")}` });
+  };
+
+  const handleScheduleAppointment = async () => {
+    if (!selectedDoctorId || !scheduleDate || !scheduleTime) {
+      toast({
+        title: "Missing information",
+        description: "Please choose a provider, date, and time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+
+    const [timePart, ampm] = scheduleTime.split(" ");
+    const [hourStr, minStr] = timePart.split(":");
+    let hours = parseInt(hourStr);
+
+    if (ampm === "PM" && hours !== 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+
+    const appointmentDate = new Date(scheduleDate);
+    appointmentDate.setHours(hours, parseInt(minStr), 0, 0);
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .insert({
+        user_id: 1,
+        doctor_id: parseInt(selectedDoctorId),
+        date_time: appointmentDate.toISOString(),
+        status: "scheduled",
+        user_notes: scheduleNotes || null,
+      })
+      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+
+    setSaving(false);
+
+    if (error) {
+      console.error("Error scheduling appointment:", error);
+      toast({
+        title: "Couldn’t schedule appointment",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setAppointments((prev) =>
+        [...prev, data[0] as unknown as Appointment].sort(
+          (a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime()
+        )
+      );
+    }
+
+    setScheduleOpen(false);
+
+    toast({
+      title: "Appointment scheduled",
+      description: `Your appointment was set for ${format(appointmentDate, "M/d/yy 'at' h:mm a")}.`,
+    });
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!apptToCancel) return;
+
+    setSaving(true);
+
+    const { data, error } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("appt_id", apptToCancel.appt_id)
+      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+
+    setSaving(false);
+
+    if (error) {
+      console.error("Error cancelling appointment:", error);
+      toast({
+        title: "Couldn’t cancel appointment",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setAppointments((prev) =>
+        prev.map((a) => (a.appt_id === apptToCancel.appt_id ? (data[0] as unknown as Appointment) : a))
+      );
+    }
+
+    setCancelOpen(false);
+    setApptToCancel(null);
+
+    toast({
+      title: "Appointment cancelled",
+      description: "Your appointment has been cancelled.",
+    });
   };
 
   if (loading) {
@@ -206,7 +354,10 @@ const Dashboard = () => {
             >
               Reschedule
             </button>
-            <button className="flex-1 text-sm py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors">
+            <button
+              onClick={() => openCancelDialog(nextAppt)}
+              className="flex-1 text-sm py-2 rounded-lg border border-destructive text-destructive font-medium hover:bg-destructive/10 transition-colors"
+            >
               Cancel
             </button>
           </div>
@@ -272,7 +423,10 @@ const Dashboard = () => {
       </div>
 
       {/* Schedule Button */}
-      <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity">
+      <button
+        onClick={openScheduleDialog}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity"
+      >
         <Plus className="w-4 h-4" />
         Schedule an Appointment
       </button>
@@ -326,6 +480,112 @@ const Dashboard = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/*new schedule dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule Appointment</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Choose a provider, date, and time for your new appointment.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Provider</p>
+              <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map((provider) => (
+                    <SelectItem key={provider.doctor_id} value={String(provider.doctor_id)}>
+                      {provider.full_name} — {provider.facility_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Date</p>
+              <CalendarPicker
+                mode="single"
+                selected={scheduleDate}
+                onSelect={setScheduleDate}
+                disabled={(date) => date < new Date()}
+                className={cn("p-3 pointer-events-auto rounded-md border")}
+              />
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Time</p>
+              <Select value={scheduleTime} onValueChange={setScheduleTime}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeSlots.map((slot) => (
+                    <SelectItem key={slot} value={slot}>
+                      {slot}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Notes</p>
+              <Input
+                value={scheduleNotes}
+                onChange={(e) => setScheduleNotes(e.target.value)}
+                placeholder="Optional reason for visit"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleScheduleAppointment}
+              disabled={saving || !selectedDoctorId || !scheduleDate || !scheduleTime}
+            >
+              {saving ? "Saving..." : "Confirm Appointment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/*Cancel next to reschedule*/}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cancel Appointment</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to cancel this appointment?
+          </p>
+          {apptToCancel && (
+            <p className="text-sm text-foreground mt-2">
+              {apptToCancel.healthcare_providers?.full_name ?? "Unknown provider"} on{" "}
+              {format(new Date(apptToCancel.date_time), "M/d/yy 'at' h:mm a")}
+            </p>
+          )}
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>
+            Keep Appointment
+          </Button>
+          <Button variant="destructive" onClick={handleCancelAppointment} disabled={saving}>
+            {saving ? "Cancelling..." : "Cancel Appointment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    
     </div>
   );
 };
