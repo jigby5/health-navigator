@@ -176,7 +176,10 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 ---
 
 ## 8. User Requirements (EARS Format)
+### Completed
+1. **The system shall protect user data and not require sensitive medical information to access core features.**
 
+### Incomplete
 ### Ubiquitous Requirements
 
 1. **The system shall provide healthcare and insurance explanations in plain, non-technical language.**
