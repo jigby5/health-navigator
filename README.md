@@ -172,3 +172,41 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 3. This confirms the change was written to PostgreSQL and is correctly read back on load.
 
 **Summary of the slice:** UI (Reschedule) → Supabase API (`PATCH /appointments`) → PostgreSQL (`UPDATE`) → UI (refetch and re-render).
+
+---
+
+## 8. User Requirements (EARS Format)
+
+### Ubiquitous Requirements
+
+1. **The system shall provide healthcare and insurance explanations in plain, non-technical language.**
+2. **The system shall protect user data and not require sensitive medical information to access core features.**
+
+### Event-Driven Requirements
+
+1. **When a user completes onboarding questions about their age, employment, and insurance status, the system shall generate a personalized healthcare guidance checklist.**
+2. **When a user selects an insurance term (e.g., deductible, copay, out-of-pocket maximum), the system shall display a plain-language explanation and example.**
+3. **When a user enters a planned healthcare service or visit type, the system shall estimate potential out-of-pocket costs.**
+4. **When a user selects a healthcare scenario (e.g., urgent care vs emergency room), the system shall guide the user through a decision flow explaining appropriate options.**
+5. **When a user updates their insurance information, the system shall update all related guidance and recommendations.**
+
+### State-Driven Requirements
+
+1. **While personalized guidance is being generated, the system shall display a loading or progress indicator.**
+2. **While required user information is missing, the system shall prompt the user to complete the missing inputs.**
+3. **While the system is unable to retrieve up-to-date insurance or cost information, the system shall notify the user and provide general guidance instead.**
+
+---
+
+## 9. Features (Dashboard)
+
+The Dashboard page implements the core working features of the vertical slice:
+
+- **Balance summary**: Displays the user’s remaining balance and copay totals pulled from the database. Not Working
+- **Quick access tiles**: Provides shortcuts to the user’s medical profile and related sections.
+- **Next Appointment card**: Shows the user’s next scheduled appointment with **date, time, doctor, and facility**, plus actions to **reschedule** or **cancel**.
+- **Upcoming & Past appointments list**: Lists all appointments grouped into **Upcoming** (scheduled) and **Past** (completed), with each item showing the **date, time (for upcoming), and provider information**.
+- **Appointment details dialog**: Allows users to open an appointment to view **notes**, inspect **doctor information**, and take actions such as **reschedule** or **cancel** when applicable.
+- **Doctor information dialog**: Shows the selected provider’s **name, facility, and specialty**.
+- **Schedule new appointment dialog**: Lets users choose a **provider, date, time, and optional notes** to create a new appointment, which is then saved to the database.
+- **Cancellation confirmation dialog**: Confirms when a user cancels an appointment and persists the updated status in the database.
