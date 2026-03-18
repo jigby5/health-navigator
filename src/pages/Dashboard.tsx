@@ -14,11 +14,13 @@ import { Input } from "@/components/ui/input";
 interface Appointment {
   appt_id: number;
   date_time: string;
+  doctor_id: number | null;
   status: string;
   user_notes: string | null;
   healthcare_providers: {
     full_name: string;
     facility_name: string;
+    specialty: string;
   } | null;
 }
 
@@ -43,6 +45,8 @@ const Dashboard = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
+  const [appointmentDetailsOpen, setAppointmentDetailsOpen] = useState(false);
+  const [doctorInfoOpen, setDoctorInfoOpen] = useState(false);
   const [newDate, setNewDate] = useState<Date | undefined>();
   const [newTime, setNewTime] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -61,7 +65,7 @@ const Dashboard = () => {
     try {
       const { data, error } = await supabase
         .from("appointments")
-        .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)")
+        .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)")
         .order("date_time", { ascending: true });
 
       if (error) {
@@ -132,6 +136,11 @@ const Dashboard = () => {
     setRescheduleOpen(true);
   };
 
+  const openAppointmentDetails = (appt: Appointment) => {
+    setSelectedAppt(appt);
+    setAppointmentDetailsOpen(true);
+  };
+
   const openScheduleDialog = () => {
     setSelectedDoctorId("");
     setScheduleDate(undefined);
@@ -158,7 +167,7 @@ const Dashboard = () => {
       .from("appointments")
       .update({ date_time: updatedDate.toISOString() })
       .eq("appt_id", selectedAppt.appt_id)
-      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+      .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)");
 
     setSaving(false);
 
@@ -210,7 +219,7 @@ const Dashboard = () => {
         status: "scheduled",
         user_notes: scheduleNotes || null,
       })
-      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+      .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)");
 
     setSaving(false);
 
@@ -249,7 +258,7 @@ const Dashboard = () => {
       .from("appointments")
       .update({ status: "cancelled" })
       .eq("appt_id", apptToCancel.appt_id)
-      .select("appt_id, date_time, status, user_notes, healthcare_providers(full_name, facility_name)");
+      .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)");
 
     setSaving(false);
 
@@ -394,7 +403,7 @@ const Dashboard = () => {
             <div
               key={appt.appt_id}
               className="flex items-center gap-3 px-4 py-3 rounded-lg bg-card border border-border hover:shadow-sm transition-shadow cursor-pointer"
-              onClick={() => tab === "upcoming" ? openReschedule(appt) : undefined}
+              onClick={() => openAppointmentDetails(appt)}
             >
               {tab === "upcoming" ? (
                 <Star className="w-4 h-4 shrink-0 text-muted-foreground" />
@@ -407,14 +416,9 @@ const Dashboard = () => {
                     ? `${format(new Date(appt.date_time), "M/d/yy")} at ${format(new Date(appt.date_time), "h:mm a")}`
                     : format(new Date(appt.date_time), "M/d/yy")}
                 </p>
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {appt.healthcare_providers?.full_name ?? "Unknown provider"}
                 </p>
-                {tab === "upcoming" && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {appt.healthcare_providers?.facility_name ?? "Unknown facility"}
-                  </p>
-                )}
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
@@ -477,6 +481,102 @@ const Dashboard = () => {
             <Button onClick={handleReschedule} disabled={saving || !newDate || !newTime}>
               {saving ? "Saving..." : "Confirm Reschedule"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Appointment Details Dialog */}
+      <Dialog open={appointmentDetailsOpen} onOpenChange={setAppointmentDetailsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Appointment</DialogTitle>
+            {selectedAppt && (
+              <p className="text-sm text-muted-foreground">
+                {selectedAppt.healthcare_providers?.full_name ?? "Unknown provider"} •{" "}
+                {format(new Date(selectedAppt.date_time), "M/d/yy 'at' h:mm a")}
+              </p>
+            )}
+          </DialogHeader>
+
+          {selectedAppt && (
+            <div className="space-y-3">
+              {selectedAppt.user_notes && (
+                <div className="rounded-lg border border-border bg-card px-3 py-2">
+                  <p className="text-xs font-medium text-muted-foreground">Notes</p>
+                  <p className="text-sm text-foreground mt-1 break-words">{selectedAppt.user_notes}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setDoctorInfoOpen(true)}
+                  disabled={!selectedAppt.healthcare_providers}
+                >
+                  View doctor info
+                </Button>
+                {selectedAppt.status === "scheduled" && (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setAppointmentDetailsOpen(false);
+                      openReschedule(selectedAppt);
+                    }}
+                  >
+                    Reschedule
+                  </Button>
+                )}
+              </div>
+
+              {selectedAppt.status === "scheduled" && (
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => {
+                    setAppointmentDetailsOpen(false);
+                    openCancelDialog(selectedAppt);
+                  }}
+                >
+                  Cancel appointment
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Doctor Info Dialog */}
+      <Dialog open={doctorInfoOpen} onOpenChange={setDoctorInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Doctor information</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-xs font-medium text-muted-foreground">Name</p>
+              <p className="text-sm text-foreground mt-1">
+                {selectedAppt?.healthcare_providers?.full_name ?? "Unknown"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-xs font-medium text-muted-foreground">Hospital</p>
+              <p className="text-sm text-foreground mt-1">
+                {selectedAppt?.healthcare_providers?.facility_name ?? "Unknown"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-xs font-medium text-muted-foreground">Specialty</p>
+              <p className="text-sm text-foreground mt-1">
+                {selectedAppt?.healthcare_providers?.specialty ?? "Unknown"}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setDoctorInfoOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
