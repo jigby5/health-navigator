@@ -1,21 +1,5 @@
 import { FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-<<<<<<< Updated upstream
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
-
-const Auth = () => {
-  const { user, login, createAccount } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [mode, setMode] = useState<"login" | "create">("login");
-  const [firstName, setFirstName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-=======
 import { Heart, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +23,6 @@ const Auth = () => {
   const [mode, setMode] = useState<AuthMode>("login");
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(emptyForm);
->>>>>>> Stashed changes
 
   const redirectPath = (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
@@ -49,15 +32,6 @@ const Auth = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-<<<<<<< Updated upstream
-    setSaving(true);
-
-    try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await createAccount(firstName, email, password);
-=======
     setLoading(true);
 
     try {
@@ -67,87 +41,21 @@ const Auth = () => {
       } else {
         await register(form);
         toast({ title: "Account created", description: "Your Easy Health account is ready." });
->>>>>>> Stashed changes
       }
 
       navigate(redirectPath, { replace: true });
     } catch (error) {
       toast({
         title: mode === "login" ? "Login failed" : "Account creation failed",
-<<<<<<< Updated upstream
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-=======
         description: error instanceof Error ? error.message : "Something went wrong.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
->>>>>>> Stashed changes
     }
   };
 
   return (
-<<<<<<< Updated upstream
-    <div className="max-w-md mx-auto px-4 py-10 animate-fade-in">
-      <div className="glass-card rounded-xl p-6 space-y-5">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {mode === "login" ? "Log In" : "Create Account"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login"
-              ? "Use the demo account for Chad or create a new one."
-              : "Create an account to unlock the rest of the app."}
-          </p>
-        </div>
-
-        {mode === "login" && (
-          <div className="rounded-lg bg-secondary px-4 py-3 text-sm text-secondary-foreground">
-            Demo login for Chad: `chad@example.com` / `chad123`
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "create" && (
-            <div>
-              <label className="text-sm font-medium text-foreground block mb-1.5">First Name</label>
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-            </div>
-          )}
-
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">Password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
-
-          <Button type="submit" className="w-full" disabled={saving}>
-            {saving ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
-          </Button>
-        </form>
-
-        <button
-          type="button"
-          onClick={() => setMode(mode === "login" ? "create" : "login")}
-          className="text-sm text-primary hover:underline"
-        >
-          {mode === "login" ? "Create an account" : "Already have an account? Log in"}
-        </button>
-=======
     <div className="min-h-[calc(100vh-3.5rem)] px-4 py-8">
       <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-3xl border border-border bg-gradient-to-br from-secondary via-background to-card p-8 shadow-sm">
@@ -259,7 +167,6 @@ const Auth = () => {
             </Button>
           </form>
         </section>
->>>>>>> Stashed changes
       </div>
     </div>
   );

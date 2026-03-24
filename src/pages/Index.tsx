@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Send, Bot, User, ExternalLink, Lightbulb } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Send, Bot, User, ExternalLink, Lightbulb, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
