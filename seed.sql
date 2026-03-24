@@ -3,7 +3,7 @@
 
 -- User: Chad
 INSERT INTO public.users (user_id, email, password_hash, first_name, last_name, health_profile, total_balance_due, total_copay_amounts)
-VALUES (1, 'chad@example.com', 'hashed_placeholder', 'Chad', 'Johnson', 'No known allergies. Peanut sensitivity.', 67.00, 25.00);
+VALUES (1, 'chad@example.com', '2b915e4cf1f2e1d650abf106931a85c4cd3ec49a381d0acb006db43ef9988063', 'Chad', 'Johnson', 'No known allergies. Peanut sensitivity.', 67.00, 25.00);
 
 -- Insurance Providers
 INSERT INTO public.insurance_providers (provider_id, name, network_type) VALUES

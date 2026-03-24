@@ -1,12 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import {
-  Send,
-  Bot,
-  User,
-  ExternalLink,
-  Lightbulb,
-  Loader2,
-} from "lucide-react";
+import { useState } from "react";
+import { Send, Bot, User, ExternalLink, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -306,7 +299,6 @@ const Index = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] max-w-2xl mx-auto">
-      {/* Start Here Banner */}
       {messages.length <= 1 && (
         <div className="p-4 animate-slide-up">
           <div className="rounded-xl bg-secondary p-5">
@@ -335,7 +327,6 @@ const Index = () => {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div
@@ -399,7 +390,6 @@ const Index = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-border bg-card/60 backdrop-blur-sm">
         <div className="flex gap-2 items-center">
           <input
