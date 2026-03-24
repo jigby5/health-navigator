@@ -2,27 +2,28 @@
 
 ## 1. App Summary
 
-Easy Health is a single-dashboard application that helps people understand and manage their health insurance and care in one place. The core problem it solves is the fragmentation of health information — members currently have to juggle multiple portals to track balances, copays, appointments, and providers. The primary user is a health plan member, whether an individual or a family, who wants a unified view of their coverage and care. Easy Health provides a **Dashboard** showing balance due and the next appointment, an **Appointments** section for viewing, scheduling, and rescheduling upcoming and past visits, a **Medical Profile** with plan details and assigned doctors, and a **Resources** section with health articles. The app also features an AI-style assistant on the home page to answer common insurance questions. All actions — including rescheduling — persist to a database and are reflected immediately after a page refresh.
+Easy Health is a single-dashboard application that helps people understand and manage their health insurance and care in one place. The core problem it solves is the fragmentation of health information — members currently have to juggle multiple portals to track balances, copays, appointments, and providers. The primary user is a health plan member, whether an individual or a family, who wants a unified view of their coverage and care. Easy Health provides a **Dashboard** showing balance due and the next appointment, an **Appointments** section for viewing, scheduling, and rescheduling upcoming and past visits, a **Medical Profile** with plan details and assigned doctors, and a **Resources** section with health articles. The app also features an AI assistant on the home page powered by Claude to answer personalized insurance questions. All actions — including rescheduling — persist to a database and are reflected immediately after a page refresh.
 
 ---
 
 ## 2. Tech Stack
 
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 18, TypeScript, Vite 5 |
-| **UI & Styling** | Tailwind CSS, shadcn/ui (Radix UI), Lucide icons |
-| **Routing & Data** | React Router 6, TanStack React Query |
-| **Backend / API** | Supabase (PostgREST API) |
-| **Database** | PostgreSQL (hosted via Supabase) |
-| **Authentication** | Not used for login in the current vertical slice; app uses a fixed user context. Supabase Auth is available in the client for future use. |
-| **External Services** | Supabase (database, API, optional auth). No other external APIs in the current slice. |
+| Layer                 | Technologies                                                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend**          | React 18, TypeScript, Vite 5                                                                                                              |
+| **UI & Styling**      | Tailwind CSS, shadcn/ui (Radix UI), Lucide icons                                                                                          |
+| **Routing & Data**    | React Router 6, TanStack React Query                                                                                                      |
+| **Backend / API**     | Supabase (PostgREST API)                                                                                                                  |
+| **Database**          | PostgreSQL (hosted via Supabase)                                                                                                          |
+| **AI Assistant**      | Anthropic Claude API (claude-sonnet-4), proxied via local Express server                                                                  |
+| **Authentication**    | Not used for login in the current vertical slice; app uses a fixed user context. Supabase Auth is available in the client for future use. |
+| **External Services** | Supabase (database, API, optional auth), Anthropic Claude API (AI assistant)                                                              |
 
 ---
 
 ## 3. Architecture Diagram
 
-The following diagram shows how the user, frontend, Supabase, and database interact. The frontend runs in the browser and communicates directly with Supabase, which provides both the API layer and the hosted database.
+The following diagram shows how the user, frontend, proxy server, Supabase, and Claude API interact.
 
 ```mermaid
 flowchart LR
@@ -34,6 +35,10 @@ flowchart LR
         React[React App\nVite + TypeScript]
     end
 
+    subgraph Proxy["Local Proxy Server\n(Express :3001)"]
+        Express[Express Server]
+    end
+
     subgraph Supabase["Supabase (BaaS)"]
         API[PostgREST API]
     end
@@ -42,12 +47,20 @@ flowchart LR
         PostgreSQL[(PostgreSQL)]
     end
 
+    subgraph AI["Anthropic"]
+        Claude[Claude API]
+    end
+
     Browser -->|"1. Opens app"| React
     React -->|"2. HTTP/REST\n(select, update)"| API
     API -->|"3. SQL"| PostgreSQL
     PostgreSQL -->|"4. Results"| API
     API -->|"5. JSON"| React
     React -->|"6. Renders UI"| Browser
+    React -->|"7. Chat message"| Express
+    Express -->|"8. Forwards + API key"| Claude
+    Claude -->|"9. AI response"| Express
+    Express -->|"10. JSON"| React
 ```
 
 **Labeled flow:**
@@ -58,8 +71,10 @@ flowchart LR
 4. **Database → Supabase:** PostgreSQL returns rows to Supabase.
 5. **Supabase → Frontend:** Supabase returns JSON to the React app.
 6. **Frontend → User:** The app updates the UI with the returned data.
-
-There is no separate application server — the "backend" is entirely Supabase's managed API and database.
+7. **Frontend → Proxy:** When the user sends a chat message, the React app posts to the local Express proxy at `http://localhost:3001/api/chat`.
+8. **Proxy → Claude API:** The proxy attaches the Anthropic API key (from `.env`) and forwards the request to the Claude API.
+9. **Claude API → Proxy:** Claude returns an AI-generated response.
+10. **Proxy → Frontend:** The proxy returns the response as JSON to the React app.
 
 ---
 
@@ -67,32 +82,37 @@ There is no separate application server — the "backend" is entirely Supabase's
 
 The following software is required to run the project locally:
 
-| Software | Purpose | Verify |
-|----------|---------|--------|
-| **Node.js** (LTS, e.g. 20.x) | Runtime for the frontend and tooling | `node --version` |
-| **npm** | Package manager (bundled with Node.js) | `npm --version` |
-| **Supabase account** | Hosted PostgreSQL and REST API | See below |
+| Software                     | Purpose                                | Verify                                                 |
+| ---------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| **Node.js** (LTS, e.g. 20.x) | Runtime for the frontend and tooling   | `node --version`                                       |
+| **npm**                      | Package manager (bundled with Node.js) | `npm --version`                                        |
+| **Supabase account**         | Hosted PostgreSQL and REST API         | See below                                              |
+| **Anthropic API key**        | Powers the AI assistant                | [console.anthropic.com](https://console.anthropic.com) |
 
 **Installation instructions:**
 
 - **Node.js:** Download the LTS version from [https://nodejs.org/](https://nodejs.org/). After installing, verify with `node --version` (expected output: `v20.x.x` or similar).
 - **npm:** Bundled with Node.js. Verify with `npm --version`. Alternatively, [Bun](https://bun.sh/) is supported — verify with `bun --version`.
 - **Supabase:** Create a free account at [https://supabase.com](https://supabase.com). Once signed in, create a new project to get a Project URL and anon key. No local PostgreSQL or `psql` installation is required — Supabase hosts the database for you.
+- **Anthropic API key:** Create an account at [console.anthropic.com](https://console.anthropic.com), add credits, and generate an API key.
 
 ---
 
 ## 5. Installation and Setup
 
 **Step 1 — Clone the repository**
+
 ```bash
 git clone <YOUR_GIT_URL>
 cd health-navigator-1
 ```
 
 **Step 2 — Install dependencies**
+
 ```bash
 npm install
 ```
+
 (Or `bun install` if you use Bun.)
 
 **Step 3 — Create a Supabase project**
@@ -102,6 +122,7 @@ Go to [app.supabase.com](https://app.supabase.com) and create a new project. Wai
 **Step 4 — Apply the schema and seed data**
 
 In the Supabase SQL Editor:
+
 1. Open the local `schema.sql` file from the project root, copy all of its contents, paste them into a **new query**, and click **Run**. This creates all tables the app requires.
 2. Open the local `seed.sql` file, copy all of its contents, paste them into another **new query**, and click **Run**. This inserts demo data — including the demo user (Chad), providers, plans, appointments, and articles.
 
@@ -113,19 +134,29 @@ If you ever need to **completely reset** the Supabase database for this project,
 **Step 5 — Configure environment variables**
 
 Copy the example environment file:
+
 ```bash
 cp .env.example .env
 ```
 
 In Supabase, navigate to **Project Settings → API** and copy the following values:
+
 - **Project URL** → `VITE_SUPABASE_URL`
 - **anon public key** → `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Paste them into your `.env` file:
+Add your Anthropic API key:
+
+- **Anthropic API key** → `ANTHROPIC_API_KEY`
+
+Your completed `.env` file should look like:
+
 ```
 VITE_SUPABASE_URL=https://xxxxxxxx.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+> ⚠️ Never commit your `.env` file to git. Confirm `.env` is listed in `.gitignore` before pushing.
 
 Restart the dev server after saving changes to `.env`.
 
@@ -133,17 +164,33 @@ Restart the dev server after saving changes to `.env`.
 
 ## 6. Running the Application
 
-Start the frontend development server:
+This app requires **two terminal windows** running simultaneously — one for the frontend and one for the AI proxy server.
+
+**Terminal 1 — Start the frontend**
+
 ```bash
 npm run dev
 ```
 
 Then open the app in your browser at:
+
 ```
 http://localhost:8080
 ```
 
-There is no separate backend process to start — the backend is Supabase. The app will connect to your Supabase project using the credentials in `.env` and load all data automatically.
+**Terminal 2 — Start the AI proxy server**
+
+```bash
+node server.js
+```
+
+You should see:
+
+```
+Proxy running on http://localhost:3001
+```
+
+> Both servers must be running for the AI assistant to work. The frontend alone is sufficient for all other features (dashboard, appointments, medical profile, resources).
 
 ---
 
@@ -176,28 +223,27 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 ---
 
 ## 8. User Requirements (EARS Format)
+
 ### Completed
+
 1. **The system shall protect user data and not require sensitive medical information to access core features.**
+2. **The system shall provide healthcare and insurance explanations in plain, non-technical language.**
+3. **When a user selects an insurance term (e.g., deductible, copay, out-of-pocket maximum), the system shall display a plain-language explanation and example.**
+4. **When a user enters a planned healthcare service or visit type, the system shall estimate potential out-of-pocket costs.**
+5. **When a user selects a healthcare scenario (e.g., urgent care vs emergency room), the system shall guide the user through a decision flow explaining appropriate options.**
+6. **While personalized guidance is being generated, the system shall display a loading or progress indicator.**
+7. **While the system is unable to retrieve up-to-date insurance or cost information, the system shall notify the user and provide general guidance instead.**
 
 ### Incomplete
-### Ubiquitous Requirements
 
-1. **The system shall provide healthcare and insurance explanations in plain, non-technical language.**
-2. **The system shall protect user data and not require sensitive medical information to access core features.**
-
-### Event-Driven Requirements
+#### Event-Driven Requirements
 
 1. **When a user completes onboarding questions about their age, employment, and insurance status, the system shall generate a personalized healthcare guidance checklist.**
-2. **When a user selects an insurance term (e.g., deductible, copay, out-of-pocket maximum), the system shall display a plain-language explanation and example.**
-3. **When a user enters a planned healthcare service or visit type, the system shall estimate potential out-of-pocket costs.**
-4. **When a user selects a healthcare scenario (e.g., urgent care vs emergency room), the system shall guide the user through a decision flow explaining appropriate options.**
-5. **When a user updates their insurance information, the system shall update all related guidance and recommendations.**
+2. **When a user updates their insurance information, the system shall update all related guidance and recommendations.**
 
-### State-Driven Requirements
+#### State-Driven Requirements
 
-1. **While personalized guidance is being generated, the system shall display a loading or progress indicator.**
-2. **While required user information is missing, the system shall prompt the user to complete the missing inputs.**
-3. **While the system is unable to retrieve up-to-date insurance or cost information, the system shall notify the user and provide general guidance instead.**
+1. **While required user information is missing, the system shall prompt the user to complete the missing inputs.**
 
 ---
 
@@ -205,11 +251,12 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 
 The Dashboard page implements the core working features of the vertical slice:
 
-- **Balance summary**: Displays the user’s remaining balance and copay totals pulled from the database. Not Working
-- **Quick access tiles**: Provides shortcuts to the user’s medical profile and related sections.
-- **Next Appointment card**: Shows the user’s next scheduled appointment with **date, time, doctor, and facility**, plus actions to **reschedule** or **cancel**.
+- **Balance summary**: Displays the user's remaining balance and copay totals pulled from the database. Not Working
+- **Quick access tiles**: Provides shortcuts to the user's medical profile and related sections.
+- **Next Appointment card**: Shows the user's next scheduled appointment with **date, time, doctor, and facility**, plus actions to **reschedule** or **cancel**.
 - **Upcoming & Past appointments list**: Lists all appointments grouped into **Upcoming** (scheduled) and **Past** (completed), with each item showing the **date, time (for upcoming), and provider information**.
 - **Appointment details dialog**: Allows users to open an appointment to view **notes**, inspect **doctor information**, and take actions such as **reschedule** or **cancel** when applicable.
-- **Doctor information dialog**: Shows the selected provider’s **name, facility, and specialty**.
+- **Doctor information dialog**: Shows the selected provider's **name, facility, and specialty**.
 - **Schedule new appointment dialog**: Lets users choose a **provider, date, time, and optional notes** to create a new appointment, which is then saved to the database.
 - **Cancellation confirmation dialog**: Confirms when a user cancels an appointment and persists the updated status in the database.
+- **AI Assistant**: Answers personalized insurance and healthcare questions using the Claude API. Dynamically pulls the user's plan details, in-network doctors, and upcoming appointments from the database to provide contextual answers.
