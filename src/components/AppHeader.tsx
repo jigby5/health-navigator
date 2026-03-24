@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { Heart, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { label: "Assistant", path: "/" },
@@ -12,6 +14,7 @@ const navItems = [
 const AppHeader = () => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 bg-card/90 backdrop-blur-md border-b border-border">
@@ -23,7 +26,6 @@ const AppHeader = () => {
           <span className="font-bold text-lg text-foreground">Easy Health</span>
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => (
             <Link
@@ -38,9 +40,17 @@ const AppHeader = () => {
               {item.label}
             </Link>
           ))}
+          {user ? (
+            <Button variant="outline" size="sm" onClick={logout}>
+              Log Out
+            </Button>
+          ) : (
+            <Button asChild size="sm">
+              <Link to="/auth">Log In</Link>
+            </Button>
+          )}
         </nav>
 
-        {/* Mobile menu button */}
         <button
           className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
           onClick={() => setMenuOpen(!menuOpen)}
@@ -49,7 +59,6 @@ const AppHeader = () => {
         </button>
       </div>
 
-      {/* Mobile nav */}
       {menuOpen && (
         <nav className="md:hidden border-t border-border bg-card animate-fade-in">
           {navItems.map((item) => (
@@ -66,6 +75,25 @@ const AppHeader = () => {
               {item.label}
             </Link>
           ))}
+          {user ? (
+            <button
+              onClick={() => {
+                logout();
+                setMenuOpen(false);
+              }}
+              className="block w-full px-4 py-3 text-sm font-medium border-b border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted text-left"
+            >
+              Log Out
+            </button>
+          ) : (
+            <Link
+              to="/auth"
+              onClick={() => setMenuOpen(false)}
+              className="block px-4 py-3 text-sm font-medium border-b border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              Log In
+            </Link>
+          )}
         </nav>
       )}
     </header>

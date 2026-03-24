@@ -78,3 +78,8 @@ CREATE TABLE public.ai_chats (
   chat_content TEXT,
   user_id INT REFERENCES public.users(user_id) ON DELETE CASCADE
 );
+
+-- Optional RLS setup for browser-based login/signup in this project
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on users" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on users" ON public.users FOR INSERT WITH CHECK (true);

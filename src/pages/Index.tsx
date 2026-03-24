@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Bot, User, ExternalLink, ArrowLeft, Lightbulb } from "lucide-react";
+import { Send, Bot, User, ExternalLink, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Message {
@@ -19,7 +19,7 @@ const Index = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "Welcome, Chad! 👋 I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
+      text: "Welcome, Chad! I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
       sources: [],
     },
   ]);
@@ -33,10 +33,10 @@ const Index = () => {
       userMsg,
       {
         role: "assistant",
-        text: `Based on the information you shared, here's what I found:\n\nYour current plan covers preventive care visits at no additional cost. For specialist visits, you'll have a $30 co-pay after meeting your $500 deductible.\n\nI'd recommend scheduling a check-up with Dr. Carsonian at InterHills Health — they're in-network and have availability next week.`,
+        text: `Based on the information you shared, here's what I found:\n\nYour current plan covers preventive care visits at no additional cost. For specialist visits, you'll have a $30 co-pay after meeting your $500 deductible.\n\nI'd recommend scheduling a check-up with Dr. Carsonian at InterHills Health - they're in-network and have availability next week.`,
         sources: [
-          { label: "CDC – Preventive Care", url: "https://www.cdc.gov/" },
-          { label: "Healthcare.gov – Glossary", url: "https://www.healthcare.gov/" },
+          { label: "CDC - Preventive Care", url: "https://www.cdc.gov/" },
+          { label: "Healthcare.gov - Glossary", url: "https://www.healthcare.gov/" },
         ],
       },
     ]);
@@ -45,7 +45,6 @@ const Index = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] max-w-2xl mx-auto">
-      {/* Start Here Banner */}
       {messages.length <= 1 && (
         <div className="p-4 animate-slide-up">
           <div className="rounded-xl bg-secondary p-5">
@@ -73,7 +72,6 @@ const Index = () => {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div
@@ -120,7 +118,6 @@ const Index = () => {
         ))}
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-border bg-card/60 backdrop-blur-sm">
         <div className="flex gap-2 items-center">
           <input

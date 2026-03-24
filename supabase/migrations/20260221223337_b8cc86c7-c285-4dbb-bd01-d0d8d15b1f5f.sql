@@ -91,6 +91,7 @@ ALTER TABLE public.ai_chats ENABLE ROW LEVEL SECURITY;
 -- Since NO authentication is used, allow public read/write access for the vertical slice
 -- In production, these would be scoped to authenticated users
 CREATE POLICY "Allow public read on users" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on users" ON public.users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public read on insurance_providers" ON public.insurance_providers FOR SELECT USING (true);
 CREATE POLICY "Allow public read on insurance_plans" ON public.insurance_plans FOR SELECT USING (true);
 CREATE POLICY "Allow public read on healthcare_providers" ON public.healthcare_providers FOR SELECT USING (true);
