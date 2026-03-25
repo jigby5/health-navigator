@@ -1,12 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  Send,
-  Bot,
-  User,
-  ExternalLink,
-  Lightbulb,
-  Loader2,
-} from "lucide-react";
+import { Send, Bot, User, ExternalLink, Lightbulb, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -53,7 +46,7 @@ Your expertise covers:
 
 Guidelines:
 - Always explain things in plain, non-technical language
-- Be warm, reassuring, and patient — health insurance is confusing for most people
+- Be warm, reassuring, and patient � health insurance is confusing for most people
 - Give specific, actionable answers
 - When relevant, reference the user's specific plan details provided below
 - If asked about something outside health insurance/healthcare, gently redirect
@@ -105,7 +98,7 @@ const Index = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "Welcome! 👋 I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
+      text: "Welcome! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
       sources: [],
     },
   ]);
@@ -133,12 +126,17 @@ const Index = () => {
             total_balance_due,
             total_copay_amounts,
             insurance_plans (
-              copay_amount,
               remaining_balance,
-              policy_type,
-              insurance_providers (
-                name,
-                network_type
+              insurance_plan_catalog (
+                copay_amount,
+                policy_type,
+                annual_deductible,
+                out_of_pocket_max,
+                insurance_providers (
+                  name,
+                  network_type,
+                  provider_id
+                )
               )
             )
           `,
@@ -146,15 +144,15 @@ const Index = () => {
           .eq("user_id", CHAD_USER_ID)
           .single();
 
-        // Fetch insurance provider ID for network lookup
-        const { data: planData } = await supabase
-          .from("insurance_plans")
-          .select("provider_id")
-          .eq("user_id", CHAD_USER_ID)
-          .single();
+        const planRow = (userData as { insurance_plans?: unknown })?.insurance_plans;
+        const plan = Array.isArray(planRow) ? planRow[0] : planRow;
+        const catalog = plan && typeof plan === "object" && "insurance_plan_catalog" in plan
+          ? (plan as { insurance_plan_catalog: { provider_id?: number } | null }).insurance_plan_catalog
+          : null;
+        const providerId = catalog?.provider_id;
 
         let doctors: UserProfile["doctors"] = [];
-        if (planData?.provider_id) {
+        if (providerId != null) {
           const { data: networkData } = await supabase
             .from("provider_network")
             .select(
@@ -166,7 +164,7 @@ const Index = () => {
               )
             `,
             )
-            .eq("insurance_provider_id", planData.provider_id);
+            .eq("insurance_provider_id", providerId);
 
           doctors =
             networkData?.map((n: any) => ({
@@ -202,17 +200,27 @@ const Index = () => {
           })) ?? [];
 
         if (userData) {
-          const plan = (userData as any).insurance_plans?.[0];
-          const provider = plan?.insurance_providers;
+          const planArr = (userData as { insurance_plans?: unknown }).insurance_plans;
+          const plan = Array.isArray(planArr) ? planArr[0] : planArr;
+          const catalog =
+            plan && typeof plan === "object" && "insurance_plan_catalog" in plan
+              ? (plan as { insurance_plan_catalog: Record<string, unknown> | null }).insurance_plan_catalog
+              : null;
+          const provider =
+            catalog && typeof catalog === "object" && "insurance_providers" in catalog
+              ? (catalog as { insurance_providers: { name?: string; network_type?: string } | null }).insurance_providers
+              : null;
 
           const profile: UserProfile = {
             firstName: userData.first_name,
             lastName: userData.last_name,
-            planType: plan?.policy_type ?? "Unknown",
+            planType: (catalog?.policy_type as string) ?? "Unknown",
             providerName: provider?.name ?? "Unknown",
             networkType: provider?.network_type ?? "Unknown",
-            copayAmount: plan?.copay_amount ?? 0,
-            remainingBalance: plan?.remaining_balance ?? 0,
+            copayAmount: (catalog?.copay_amount as number) ?? 0,
+            remainingBalance: (plan && typeof plan === "object" && "remaining_balance" in plan
+              ? (plan as { remaining_balance: number }).remaining_balance
+              : 0) ?? 0,
             totalBalanceDue: userData.total_balance_due ?? 0,
             doctors,
             upcomingAppointments,
@@ -224,14 +232,14 @@ const Index = () => {
           setMessages([
             {
               role: "assistant",
-              text: `Welcome, ${userData.first_name}! 👋 I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
+              text: `Welcome, ${userData.first_name}! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
               sources: [],
             },
           ]);
         }
       } catch (err) {
         console.error("Failed to fetch user profile:", err);
-        // App still works — falls back to generic prompt
+        // App still works � falls back to generic prompt
       }
     };
 
@@ -306,7 +314,6 @@ const Index = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] max-w-2xl mx-auto">
-      {/* Start Here Banner */}
       {messages.length <= 1 && (
         <div className="p-4 animate-slide-up">
           <div className="rounded-xl bg-secondary p-5">
@@ -335,7 +342,6 @@ const Index = () => {
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div
@@ -399,7 +405,6 @@ const Index = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-border bg-card/60 backdrop-blur-sm">
         <div className="flex gap-2 items-center">
           <input

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Appointment {
   appt_id: number;
@@ -39,6 +40,7 @@ const timeSlots = [
 ];
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,12 +62,18 @@ const Dashboard = () => {
   const [apptToCancel, setApptToCancel] = useState<Appointment | null>(null);
 
   const fetchAppointments = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setLoadError(null);
     try {
       const { data, error } = await supabase
         .from("appointments")
         .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)")
+        .eq("user_id", user.user_id)
         .order("date_time", { ascending: true });
 
       if (error) {
@@ -73,7 +81,7 @@ const Dashboard = () => {
         setAppointments([]);
         setLoadError(error.message);
         toast({
-          title: "Couldn’t load appointments",
+          title: "Couldn't load appointments",
           description: error.message,
           variant: "destructive",
         });
@@ -87,7 +95,7 @@ const Dashboard = () => {
       setAppointments([]);
       setLoadError(message);
       toast({
-        title: "Couldn’t load appointments",
+        title: "Couldn't load appointments",
         description: message,
         variant: "destructive",
       });
@@ -110,7 +118,7 @@ const Dashboard = () => {
     if (error) {
       console.error("Error fetching providers:", error);
       toast({
-        title: "Couldn’t load providers",
+        title: "Couldn't load providers",
         description: error.message,
         variant: "destructive",
       });
@@ -123,7 +131,7 @@ const Dashboard = () => {
   useEffect(() => {
     fetchAppointments();
     fetchProviders();
-  }, []);
+  }, [user]);
 
   const upcoming = appointments.filter((a) => a.status === "scheduled");
   const past = appointments.filter((a) => a.status === "completed");
@@ -153,7 +161,6 @@ const Dashboard = () => {
     if (!selectedAppt || !newDate || !newTime) return;
     setSaving(true);
 
-    // Parse time string into hours/minutes
     const [timePart, ampm] = newTime.split(" ");
     const [hourStr, minStr] = timePart.split(":");
     let hours = parseInt(hourStr);
@@ -177,7 +184,6 @@ const Dashboard = () => {
       return;
     }
 
-    // Update local state with the returned row
     if (data && data.length > 0) {
       setAppointments((prev) =>
         prev.map((a) => (a.appt_id === selectedAppt.appt_id ? (data[0] as unknown as Appointment) : a))
@@ -189,7 +195,7 @@ const Dashboard = () => {
   };
 
   const handleScheduleAppointment = async () => {
-    if (!selectedDoctorId || !scheduleDate || !scheduleTime) {
+    if (!user || !selectedDoctorId || !scheduleDate || !scheduleTime) {
       toast({
         title: "Missing information",
         description: "Please choose a provider, date, and time.",
@@ -213,7 +219,7 @@ const Dashboard = () => {
     const { data, error } = await supabase
       .from("appointments")
       .insert({
-        user_id: 1,
+        user_id: user.user_id,
         doctor_id: parseInt(selectedDoctorId),
         date_time: appointmentDate.toISOString(),
         status: "scheduled",
@@ -226,7 +232,7 @@ const Dashboard = () => {
     if (error) {
       console.error("Error scheduling appointment:", error);
       toast({
-        title: "Couldn’t schedule appointment",
+        title: "Couldn't schedule appointment",
         description: error.message,
         variant: "destructive",
       });
@@ -265,7 +271,7 @@ const Dashboard = () => {
     if (error) {
       console.error("Error cancelling appointment:", error);
       toast({
-        title: "Couldn’t cancel appointment",
+        title: "Couldn't cancel appointment",
         description: error.message,
         variant: "destructive",
       });
@@ -297,9 +303,8 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
-      {/* Welcome */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Hi, Chad 👋</h1>
+        <h1 className="text-2xl font-bold text-foreground">Hi, {user?.first_name ?? "Chad"}!</h1>
         <p className="text-sm text-muted-foreground mt-1">Here's your health overview</p>
       </div>
 
@@ -310,7 +315,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Quick Actions Row */}
       <div className="grid grid-cols-2 gap-3">
         <Link
           to="/transactions"
@@ -320,7 +324,7 @@ const Dashboard = () => {
             <DollarSign className="w-5 h-5 text-secondary-foreground" />
           </div>
           <div className="text-center">
-            <p className="text-xl font-bold text-foreground">$67</p>
+            <p className="text-xl font-bold text-foreground">${user?.total_balance_due?.toFixed(0) ?? "0"}</p>
             <p className="text-xs text-muted-foreground">Remaining balance</p>
           </div>
         </Link>
@@ -338,7 +342,6 @@ const Dashboard = () => {
         </Link>
       </div>
 
-      {/* Next Appointment Card */}
       {nextAppt && (
         <div className="glass-card rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -373,7 +376,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Appointments Tabs */}
       <div>
         <div className="flex border-b border-border mb-4">
           <button
@@ -438,7 +440,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Schedule Button */}
       <button
         onClick={openScheduleDialog}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity"
@@ -447,7 +448,6 @@ const Dashboard = () => {
         Schedule an Appointment
       </button>
 
-      {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -613,7 +613,7 @@ const Dashboard = () => {
                 <SelectContent>
                   {providers.map((provider) => (
                     <SelectItem key={provider.doctor_id} value={String(provider.doctor_id)}>
-                      {provider.full_name} — {provider.facility_name}
+                      {provider.full_name} - {provider.facility_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -671,33 +671,31 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/*Cancel next to reschedule*/}
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Cancel Appointment</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to cancel this appointment?
-          </p>
-          {apptToCancel && (
-            <p className="text-sm text-foreground mt-2">
-              {apptToCancel.healthcare_providers?.full_name ?? "Unknown provider"} on{" "}
-              {format(new Date(apptToCancel.date_time), "M/d/yy 'at' h:mm a")}
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Appointment</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel this appointment?
             </p>
-          )}
-        </DialogHeader>
+            {apptToCancel && (
+              <p className="text-sm text-foreground mt-2">
+                {apptToCancel.healthcare_providers?.full_name ?? "Unknown provider"} on{" "}
+                {format(new Date(apptToCancel.date_time), "M/d/yy 'at' h:mm a")}
+              </p>
+            )}
+          </DialogHeader>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setCancelOpen(false)}>
-            Keep Appointment
-          </Button>
-          <Button variant="destructive" onClick={handleCancelAppointment} disabled={saving}>
-            {saving ? "Cancelling..." : "Cancel Appointment"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>
+              Keep Appointment
+            </Button>
+            <Button variant="destructive" onClick={handleCancelAppointment} disabled={saving}>
+              {saving ? "Cancelling..." : "Cancel Appointment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
