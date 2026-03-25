@@ -14,6 +14,8 @@ import Transactions from "./pages/Transactions";
 import SelectPlan from "./pages/SelectPlan";
 import Resources from "./pages/Resources";
 import NotFound from "./pages/NotFound";
+import EditProfile from "./pages/EditProfile";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +26,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ScrollToTop />
           <AppHeader />
           <Routes>
             <Route path="/" element={<Index />} />
@@ -32,6 +35,7 @@ const App = () => (
               <Route path="/select-plan" element={<SelectPlan />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<MedicalProfile />} />
+              <Route path="/profile/edit" element={<EditProfile />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/resources" element={<Resources />} />
             </Route>

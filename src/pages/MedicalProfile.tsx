@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import SelectInsurancePlanForm from "@/components/SelectInsurancePlanForm";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 interface ProfilePlan {
   plan_id: number;
@@ -302,7 +303,49 @@ const MedicalProfile = () => {
           </div>
         </div>
       </div>
+      <div className="glass-card rounded-xl p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">
+              Personal Information
+            </h2>
+          </div>
 
+          <Link to="/profile/edit">
+            <Button variant="outline" size="sm">
+              Edit Information
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">First Name</p>
+            <p className="text-sm font-medium text-foreground">
+              {user?.first_name ?? "—"}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs text-muted-foreground">Last Name</p>
+            <p className="text-sm font-medium text-foreground">
+              {user?.last_name ?? "—"}
+            </p>
+          </div>
+
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Email</p>
+            <p className="text-sm font-medium text-foreground">
+              {user?.email ?? "—"}
+            </p>
+          </div>
+
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Password</p>
+            <p className="text-sm font-medium text-foreground">********</p>
+          </div>
+        </div>
+      </div>
       <div className="glass-card rounded-xl p-5 space-y-3">
         <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Stethoscope className="w-4 h-4 text-primary" />
