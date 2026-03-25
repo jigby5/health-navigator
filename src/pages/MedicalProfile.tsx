@@ -1,6 +1,6 @@
 ﻿import { Shield, CreditCard, Stethoscope, RefreshCw, Info, Calendar, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   Tooltip,
   TooltipContent,
@@ -40,6 +40,7 @@ interface Doctor {
   full_name: string;
   specialty: string;
   facility_name: string;
+  last_seen: string | null;
 }
 
 const MedicalProfile = () => {
@@ -96,7 +97,50 @@ const MedicalProfile = () => {
         variant: "destructive",
       });
     } else {
-      setDoctors(doctorData ?? []);
+      const baseDoctors: Omit<Doctor, "last_seen">[] = (doctorData ?? []).map((d) => ({
+        doctor_id: d.doctor_id,
+        full_name: d.full_name,
+        specialty: d.specialty,
+        facility_name: d.facility_name,
+      }));
+
+      const doctorIds = baseDoctors.map((d) => d.doctor_id);
+      if (doctorIds.length === 0) {
+        setDoctors([]);
+        return;
+      }
+
+      // Fetch the latest appointment date_time per doctor for this user.
+      const { data: appointmentRows, error: apptError } = await supabase
+        .from("appointments")
+        .select("doctor_id, date_time")
+        .eq("user_id", user.user_id)
+        .in("doctor_id", doctorIds)
+        .order("date_time", { ascending: false });
+
+      if (apptError) {
+        toast({
+          title: "Couldn't load doctor last seen dates",
+          description: apptError.message,
+          variant: "destructive",
+        });
+        setDoctors(baseDoctors.map((d) => ({ ...d, last_seen: null })));
+        return;
+      }
+
+      const lastSeenByDoctorId: Record<number, string> = {};
+      (appointmentRows ?? []).forEach((row) => {
+        if (!row.doctor_id) return;
+        if (lastSeenByDoctorId[row.doctor_id]) return; // already have the most recent due to sorting
+        lastSeenByDoctorId[row.doctor_id] = row.date_time;
+      });
+
+      setDoctors(
+        baseDoctors.map((d) => ({
+          ...d,
+          last_seen: lastSeenByDoctorId[d.doctor_id] ?? null,
+        })),
+      );
     }
   };
 
@@ -268,6 +312,10 @@ const MedicalProfile = () => {
             <div>
               <p className="text-sm font-medium text-foreground">{doc.full_name}</p>
               <p className="text-xs text-muted-foreground">{doc.specialty}</p>
+              <p className="text-xs text-muted-foreground">
+                Last seen:{" "}
+                {doc.last_seen ? format(new Date(doc.last_seen), "M/d/yy") : "—"}
+              </p>
             </div>
             <a
               href="tel:(555)123-4567"
