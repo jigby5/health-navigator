@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import SelectInsurancePlanForm from "@/components/SelectInsurancePlanForm";
+import { Link } from "react-router-dom";
 
 interface ProfilePlan {
   plan_id: number;

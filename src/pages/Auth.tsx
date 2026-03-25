@@ -1,12 +1,15 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Heart, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { CatalogPlanRow } from "@/components/SelectInsurancePlanForm";
+import { enrollUserInPlan } from "@/lib/enrollment";
 
 type AuthMode = "login" | "register";
 
@@ -15,6 +18,7 @@ const emptyForm = {
   lastName: "",
   email: "",
   password: "",
+  coverageValue: "",
 };
 
 const Auth = () => {
@@ -23,9 +27,42 @@ const Auth = () => {
   const location = useLocation();
   const [mode, setMode] = useState<AuthMode>("login");
   const [loading, setLoading] = useState(false);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plans, setPlans] = useState<CatalogPlanRow[]>([]);
   const [form, setForm] = useState(emptyForm);
 
   const redirectPath = (location.state as { from?: string } | null)?.from ?? "/dashboard";
+
+  useEffect(() => {
+    if (mode !== "register") {
+      return;
+    }
+
+    const loadPlans = async () => {
+      setPlansLoading(true);
+      const { data, error } = await supabase
+        .from("insurance_plan_catalog")
+        .select(
+          "catalog_plan_id, plan_name, copay_amount, policy_type, annual_deductible, out_of_pocket_max, insurance_providers(provider_id, name, network_type)",
+        )
+        .order("plan_name", { ascending: true });
+
+      if (error) {
+        toast({
+          title: "Couldn't load plans",
+          description: error.message,
+          variant: "destructive",
+        });
+        setPlans([]);
+      } else {
+        setPlans((data as CatalogPlanRow[]) ?? []);
+      }
+
+      setPlansLoading(false);
+    };
+
+    void loadPlans();
+  }, [mode]);
 
   if (user) {
     return <Navigate to={redirectPath} replace />;
@@ -46,9 +83,29 @@ const Auth = () => {
           .maybeSingle();
         navigate(plan ? redirectPath : "/select-plan", { replace: true });
       } else {
-        await register(form);
+        if (!form.coverageValue) {
+          throw new Error("Choose an insurance plan from the database or select uninsured.");
+        }
+
+        const createdUser = await register({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          password: form.password,
+        });
+
+        if (form.coverageValue === "uninsured") {
+          toast({
+            title: "Account created",
+            description: "Your account is ready. Uninsured users still use the existing coverage flow, so you can finish on the next screen.",
+          });
+          navigate("/select-plan", { replace: true });
+          return;
+        }
+
+        await enrollUserInPlan(createdUser.user_id, Number.parseInt(form.coverageValue, 10));
         toast({ title: "Account created", description: "Your Easy Health account is ready." });
-        navigate("/select-plan", { replace: true });
+        navigate(redirectPath, { replace: true });
       }
     } catch (error) {
       toast({
@@ -158,6 +215,28 @@ const Auth = () => {
                 required
               />
             </div>
+
+            {mode === "register" && (
+              <div className="space-y-2">
+                <Label htmlFor="coverage">Insurance plan</Label>
+                <Select
+                  value={form.coverageValue}
+                  onValueChange={(value) => setForm((current) => ({ ...current, coverageValue: value }))}
+                >
+                  <SelectTrigger id="coverage">
+                    <SelectValue placeholder={plansLoading ? "Loading plans..." : "Choose a plan or uninsured"} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[min(24rem,70vh)]">
+                    <SelectItem value="uninsured">Uninsured</SelectItem>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.catalog_plan_id} value={String(plan.catalog_plan_id)}>
+                        {plan.insurance_providers?.name ?? "Provider"} - {plan.plan_name} · ${plan.copay_amount} copay · {plan.policy_type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <Button className="w-full" disabled={loading} type="submit">
               {loading ? (
