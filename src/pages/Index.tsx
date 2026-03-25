@@ -126,12 +126,17 @@ const Index = () => {
             total_balance_due,
             total_copay_amounts,
             insurance_plans (
-              copay_amount,
               remaining_balance,
-              policy_type,
-              insurance_providers (
-                name,
-                network_type
+              insurance_plan_catalog (
+                copay_amount,
+                policy_type,
+                annual_deductible,
+                out_of_pocket_max,
+                insurance_providers (
+                  name,
+                  network_type,
+                  provider_id
+                )
               )
             )
           `,
@@ -139,15 +144,15 @@ const Index = () => {
           .eq("user_id", CHAD_USER_ID)
           .single();
 
-        // Fetch insurance provider ID for network lookup
-        const { data: planData } = await supabase
-          .from("insurance_plans")
-          .select("provider_id")
-          .eq("user_id", CHAD_USER_ID)
-          .single();
+        const planRow = (userData as { insurance_plans?: unknown })?.insurance_plans;
+        const plan = Array.isArray(planRow) ? planRow[0] : planRow;
+        const catalog = plan && typeof plan === "object" && "insurance_plan_catalog" in plan
+          ? (plan as { insurance_plan_catalog: { provider_id?: number } | null }).insurance_plan_catalog
+          : null;
+        const providerId = catalog?.provider_id;
 
         let doctors: UserProfile["doctors"] = [];
-        if (planData?.provider_id) {
+        if (providerId != null) {
           const { data: networkData } = await supabase
             .from("provider_network")
             .select(
@@ -159,7 +164,7 @@ const Index = () => {
               )
             `,
             )
-            .eq("insurance_provider_id", planData.provider_id);
+            .eq("insurance_provider_id", providerId);
 
           doctors =
             networkData?.map((n: any) => ({
@@ -195,17 +200,27 @@ const Index = () => {
           })) ?? [];
 
         if (userData) {
-          const plan = (userData as any).insurance_plans?.[0];
-          const provider = plan?.insurance_providers;
+          const planArr = (userData as { insurance_plans?: unknown }).insurance_plans;
+          const plan = Array.isArray(planArr) ? planArr[0] : planArr;
+          const catalog =
+            plan && typeof plan === "object" && "insurance_plan_catalog" in plan
+              ? (plan as { insurance_plan_catalog: Record<string, unknown> | null }).insurance_plan_catalog
+              : null;
+          const provider =
+            catalog && typeof catalog === "object" && "insurance_providers" in catalog
+              ? (catalog as { insurance_providers: { name?: string; network_type?: string } | null }).insurance_providers
+              : null;
 
           const profile: UserProfile = {
             firstName: userData.first_name,
             lastName: userData.last_name,
-            planType: plan?.policy_type ?? "Unknown",
+            planType: (catalog?.policy_type as string) ?? "Unknown",
             providerName: provider?.name ?? "Unknown",
             networkType: provider?.network_type ?? "Unknown",
-            copayAmount: plan?.copay_amount ?? 0,
-            remainingBalance: plan?.remaining_balance ?? 0,
+            copayAmount: (catalog?.copay_amount as number) ?? 0,
+            remainingBalance: (plan && typeof plan === "object" && "remaining_balance" in plan
+              ? (plan as { remaining_balance: number }).remaining_balance
+              : 0) ?? 0,
             totalBalanceDue: userData.total_balance_due ?? 0,
             doctors,
             upcomingAppointments,

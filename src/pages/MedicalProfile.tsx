@@ -1,21 +1,36 @@
-import { Shield, CreditCard, Stethoscope, Edit, Info, Calendar, Phone } from "lucide-react";
+import { Shield, CreditCard, Stethoscope, RefreshCw, Info, Calendar, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import SelectInsurancePlanForm from "@/components/SelectInsurancePlanForm";
 
 interface ProfilePlan {
-  policy_type: string;
-  copay_amount: number | null;
+  plan_id: number;
   remaining_balance: number | null;
-  insurance_providers: {
-    name: string;
-    network_type: string;
+  catalog_plan_id: number;
+  insurance_plan_catalog: {
+    plan_name: string;
+    copay_amount: number;
+    policy_type: string;
+    annual_deductible: number;
+    out_of_pocket_max: number;
+    insurance_providers: {
+      name: string;
+      network_type: string;
+    } | null;
   } | null;
 }
 
@@ -27,65 +42,108 @@ interface Doctor {
 }
 
 const MedicalProfile = () => {
-  const { user } = useAuth();
-  const [editing, setEditing] = useState(false);
+  const { user, refreshEnrollment, refreshUser } = useAuth();
+  const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [plan, setPlan] = useState<ProfilePlan | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
 
-  useEffect(() => {
+  const loadProfile = async () => {
     if (!user) {
       return;
     }
 
-    const fetchProfile = async () => {
-      const [{ data: planData, error: planError }, { data: doctorData, error: doctorError }] = await Promise.all([
-        supabase
-          .from("insurance_plans")
-          .select("policy_type, copay_amount, remaining_balance, insurance_providers(name, network_type)")
-          .eq("user_id", user.user_id)
-          .maybeSingle(),
-        supabase
-          .from("healthcare_providers")
-          .select("doctor_id, full_name, specialty, facility_name")
-          .order("full_name", { ascending: true }),
-      ]);
+    const [{ data: planData, error: planError }, { data: doctorData, error: doctorError }] = await Promise.all([
+      supabase
+        .from("insurance_plans")
+        .select(
+          `
+          plan_id,
+          remaining_balance,
+          catalog_plan_id,
+          insurance_plan_catalog (
+            plan_name,
+            copay_amount,
+            policy_type,
+            annual_deductible,
+            out_of_pocket_max,
+            insurance_providers (name, network_type)
+          )
+        `,
+        )
+        .eq("user_id", user.user_id)
+        .maybeSingle(),
+      supabase
+        .from("healthcare_providers")
+        .select("doctor_id, full_name, specialty, facility_name")
+        .order("full_name", { ascending: true }),
+    ]);
 
-      if (planError) {
-        toast({
-          title: "Couldn't load plan details",
-          description: planError.message,
-          variant: "destructive",
-        });
-      } else {
-        setPlan((planData as ProfilePlan | null) ?? null);
-      }
+    if (planError) {
+      toast({
+        title: "Couldn't load plan details",
+        description: planError.message,
+        variant: "destructive",
+      });
+    } else {
+      setPlan((planData as ProfilePlan | null) ?? null);
+    }
 
-      if (doctorError) {
-        toast({
-          title: "Couldn't load doctors",
-          description: doctorError.message,
-          variant: "destructive",
-        });
-      } else {
-        setDoctors(doctorData ?? []);
-      }
-    };
+    if (doctorError) {
+      toast({
+        title: "Couldn't load doctors",
+        description: doctorError.message,
+        variant: "destructive",
+      });
+    } else {
+      setDoctors(doctorData ?? []);
+    }
+  };
 
-    fetchProfile();
+  useEffect(() => {
+    void loadProfile();
   }, [user]);
+
+  const catalog = plan?.insurance_plan_catalog;
+  const provider = catalog?.insurance_providers;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Medical Profile</h1>
         <button
-          onClick={() => setEditing(!editing)}
+          type="button"
+          onClick={() => setChangePlanOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
-          <Edit className="w-3.5 h-3.5" />
-          {editing ? "Done" : "Edit"}
+          <RefreshCw className="w-3.5 h-3.5" />
+          Change plan
         </button>
       </div>
+
+      <Dialog open={changePlanOpen} onOpenChange={setChangePlanOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change insurance plan</DialogTitle>
+            <DialogDescription>
+              Pick a different plan from the catalog. Your copay and deductible totals will update to match.
+            </DialogDescription>
+          </DialogHeader>
+          {user && (
+            <SelectInsurancePlanForm
+              userId={user.user_id}
+              initialCatalogPlanId={plan?.catalog_plan_id ?? null}
+              submitLabel="Update plan"
+              onSuccess={async () => {
+                await refreshEnrollment();
+                await refreshUser();
+                await loadProfile();
+                setChangePlanOpen(false);
+                toast({ title: "Plan updated", description: "Your profile now reflects the selected plan." });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="rounded-xl bg-primary text-primary-foreground p-5 shadow-lg">
         <div className="flex items-center justify-between mb-4">
@@ -117,13 +175,17 @@ const MedicalProfile = () => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-muted-foreground">Plan Name</p>
-            <p className="text-sm font-medium text-foreground">{plan?.insurance_providers?.name ?? "Blue Shield PPO"}</p>
+            <p className="text-xs text-muted-foreground">Carrier</p>
+            <p className="text-sm font-medium text-foreground">{provider?.name ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Plan name</p>
+            <p className="text-sm font-medium text-foreground">{catalog?.plan_name ?? "—"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Plan Type</p>
             <div className="flex items-center gap-1">
-              <span className="text-sm font-medium text-foreground">{plan?.policy_type ?? "Individual"}</span>
+              <span className="text-sm font-medium text-foreground">{catalog?.policy_type ?? "—"}</span>
               <Tooltip>
                 <TooltipTrigger>
                   <Info className="w-3.5 h-3.5 text-muted-foreground" />
@@ -138,7 +200,7 @@ const MedicalProfile = () => {
           </div>
           <div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              Deductible
+              Deductible (remaining)
               <Tooltip>
                 <TooltipTrigger>
                   <Info className="w-3 h-3 text-muted-foreground" />
@@ -150,7 +212,7 @@ const MedicalProfile = () => {
                 </TooltipContent>
               </Tooltip>
             </p>
-            <p className="text-sm font-medium text-foreground">${user?.total_balance_due?.toFixed(2) ?? "0.00"} due</p>
+            <p className="text-sm font-medium text-foreground">${user?.total_balance_due?.toFixed(2) ?? "0.00"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -161,32 +223,36 @@ const MedicalProfile = () => {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="text-xs max-w-[200px]">
-                    A fixed amount you pay for a covered service after you've paid your deductible.
+                    A fixed amount you pay for a covered service after you have paid your deductible.
                   </p>
                 </TooltipContent>
               </Tooltip>
             </p>
-            <p className="text-sm font-medium text-foreground">${plan?.copay_amount?.toFixed(2) ?? "30.00"} specialist</p>
+            <p className="text-sm font-medium text-foreground">${catalog?.copay_amount?.toFixed(2) ?? "—"} specialist</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              Out of Network
+              Network
               <Tooltip>
                 <TooltipTrigger>
                   <Info className="w-3 h-3 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="text-xs max-w-[200px]">
-                    Providers not contracted with your plan. You'll pay more if you use them.
+                    Providers contracted with your plan. In-network care usually costs you less.
                   </p>
                 </TooltipContent>
               </Tooltip>
             </p>
-            <p className="text-sm font-medium text-foreground">{plan?.insurance_providers?.network_type ?? "PPO"} network</p>
+            <p className="text-sm font-medium text-foreground">{provider?.network_type ?? "—"}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Out-of-Pocket Max</p>
-            <p className="text-sm font-medium text-foreground">${plan?.remaining_balance?.toFixed(2) ?? "3000.00"}</p>
+            <p className="text-xs text-muted-foreground">Out-of-pocket max (plan year)</p>
+            <p className="text-sm font-medium text-foreground">${catalog?.out_of_pocket_max?.toFixed(2) ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Remaining balance (plan)</p>
+            <p className="text-sm font-medium text-foreground">${plan?.remaining_balance?.toFixed(2) ?? "—"}</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { hashPassword, normalizeEmail } from "@/lib/auth";
@@ -18,8 +26,13 @@ interface RegisterInput extends LoginInput {
 interface AuthContextValue {
   user: AppUser | null;
   initializing: boolean;
-  login: (input: LoginInput) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  /** True once we know whether the user has an `insurance_plans` row. */
+  enrollmentLoading: boolean;
+  hasEnrollment: boolean;
+  refreshEnrollment: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  login: (input: LoginInput) => Promise<AppUser>;
+  register: (input: RegisterInput) => Promise<AppUser>;
   logout: () => void;
 }
 
@@ -47,6 +60,33 @@ const readStoredUserId = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(true);
+  const [hasEnrollment, setHasEnrollment] = useState(false);
+
+  const loadEnrollmentState = useCallback(async (userId: number | null) => {
+    if (userId == null) {
+      setHasEnrollment(false);
+      setEnrollmentLoading(false);
+      return;
+    }
+
+    setEnrollmentLoading(true);
+    const { data } = await supabase.from("insurance_plans").select("plan_id").eq("user_id", userId).maybeSingle();
+    setHasEnrollment(!!data);
+    setEnrollmentLoading(false);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+
+    const { data, error } = await supabase.from("users").select("*").eq("user_id", user.user_id).maybeSingle();
+
+    if (!error && data) {
+      setUser(data);
+    }
+  }, [user]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -54,6 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!storedUserId) {
         setInitializing(false);
+        setEnrollmentLoading(false);
         return;
       }
 
@@ -66,15 +107,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error || !data) {
         window.localStorage.removeItem(SESSION_KEY);
         setUser(null);
+        setHasEnrollment(false);
+        setEnrollmentLoading(false);
       } else {
         setUser(data);
+        await loadEnrollmentState(data.user_id);
       }
 
       setInitializing(false);
     };
 
-    bootstrap();
-  }, []);
+    void bootstrap();
+  }, [loadEnrollmentState]);
 
   const persistSession = (nextUser: AppUser | null) => {
     if (typeof window === "undefined") {
@@ -89,7 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.localStorage.setItem(SESSION_KEY, String(nextUser.user_id));
   };
 
-  const login = async ({ email, password }: LoginInput) => {
+  const login = useCallback(async ({ email, password }: LoginInput) => {
     const normalizedEmail = normalizeEmail(email);
     const { data, error } = await supabase
       .from("users")
@@ -108,7 +152,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (normalizedEmail === DEMO_EMAIL && password === DEMO_PASSWORD) {
       setUser(data);
       persistSession(data);
-      return;
+      await loadEnrollmentState(data.user_id);
+      return data;
     }
 
     const passwordHash = await hashPassword(password);
@@ -119,9 +164,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setUser(data);
     persistSession(data);
-  };
+    await loadEnrollmentState(data.user_id);
+    return data;
+  }, [loadEnrollmentState]);
 
-  const register = async ({ email, password, firstName, lastName }: RegisterInput) => {
+  const register = useCallback(async ({ email, password, firstName, lastName }: RegisterInput) => {
     const normalizedEmail = normalizeEmail(email);
     const trimmedFirstName = firstName.trim();
     const trimmedLastName = lastName.trim();
@@ -161,16 +208,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setUser(data);
     persistSession(data);
-  };
+    await loadEnrollmentState(data.user_id);
+    return data;
+  }, [loadEnrollmentState]);
 
   const logout = () => {
     setUser(null);
     persistSession(null);
+    setHasEnrollment(false);
+    setEnrollmentLoading(false);
   };
 
+  const refreshEnrollment = useCallback(() => loadEnrollmentState(user?.user_id ?? null), [loadEnrollmentState, user?.user_id]);
+
   const value = useMemo(
-    () => ({ user, initializing, login, register, logout }),
-    [initializing, user],
+    () => ({
+      user,
+      initializing,
+      enrollmentLoading,
+      hasEnrollment,
+      refreshEnrollment,
+      refreshUser,
+      login,
+      register,
+      logout,
+    }),
+    [enrollmentLoading, hasEnrollment, initializing, login, logout, refreshEnrollment, refreshUser, register, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

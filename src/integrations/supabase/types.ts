@@ -130,43 +130,75 @@ export type Database = {
         }
         Relationships: []
       }
-      insurance_plans: {
+      insurance_plan_catalog: {
         Row: {
-          copay_amount: number | null
-          plan_id: number
+          annual_deductible: number
+          catalog_plan_id: number
+          copay_amount: number
+          out_of_pocket_max: number
+          plan_name: string
           policy_type: string
-          provider_id: number | null
-          remaining_balance: number | null
-          user_id: number | null
+          provider_id: number
         }
         Insert: {
-          copay_amount?: number | null
-          plan_id?: number
+          annual_deductible?: number
+          catalog_plan_id?: number
+          copay_amount?: number
+          out_of_pocket_max?: number
+          plan_name: string
           policy_type: string
-          provider_id?: number | null
-          remaining_balance?: number | null
-          user_id?: number | null
+          provider_id: number
         }
         Update: {
-          copay_amount?: number | null
-          plan_id?: number
+          annual_deductible?: number
+          catalog_plan_id?: number
+          copay_amount?: number
+          out_of_pocket_max?: number
+          plan_name?: string
           policy_type?: string
-          provider_id?: number | null
-          remaining_balance?: number | null
-          user_id?: number | null
+          provider_id?: number
         }
         Relationships: [
           {
-            foreignKeyName: "insurance_plans_provider_id_fkey"
+            foreignKeyName: "insurance_plan_catalog_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
             referencedRelation: "insurance_providers"
             referencedColumns: ["provider_id"]
           },
+        ]
+      }
+      insurance_plans: {
+        Row: {
+          catalog_plan_id: number
+          plan_id: number
+          remaining_balance: number | null
+          user_id: number
+        }
+        Insert: {
+          catalog_plan_id: number
+          plan_id?: number
+          remaining_balance?: number | null
+          user_id: number
+        }
+        Update: {
+          catalog_plan_id?: number
+          plan_id?: number
+          remaining_balance?: number | null
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurance_plans_catalog_plan_id_fkey"
+            columns: ["catalog_plan_id"]
+            isOneToOne: false
+            referencedRelation: "insurance_plan_catalog"
+            referencedColumns: ["catalog_plan_id"]
+          },
           {
             foreignKeyName: "insurance_plans_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["user_id"]
           },

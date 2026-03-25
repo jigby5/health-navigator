@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type AuthMode = "login" | "register";
 
@@ -36,14 +37,19 @@ const Auth = () => {
 
     try {
       if (mode === "login") {
-        await login({ email: form.email, password: form.password });
+        const loggedIn = await login({ email: form.email, password: form.password });
         toast({ title: "Welcome back", description: "You are now logged in." });
+        const { data: plan } = await supabase
+          .from("insurance_plans")
+          .select("plan_id")
+          .eq("user_id", loggedIn.user_id)
+          .maybeSingle();
+        navigate(plan ? redirectPath : "/select-plan", { replace: true });
       } else {
         await register(form);
         toast({ title: "Account created", description: "Your Easy Health account is ready." });
+        navigate("/select-plan", { replace: true });
       }
-
-      navigate(redirectPath, { replace: true });
     } catch (error) {
       toast({
         title: mode === "login" ? "Login failed" : "Account creation failed",

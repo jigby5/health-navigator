@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import MedicalProfile from "./pages/MedicalProfile";
+import SelectPlan from "./pages/SelectPlan";
 import Resources from "./pages/Resources";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route element={<ProtectedRoute />}>
+              <Route path="/select-plan" element={<SelectPlan />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<MedicalProfile />} />
               <Route path="/resources" element={<Resources />} />
