@@ -7,6 +7,7 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,24 @@ interface Provider {
   specialty: string;
 }
 
+interface InsurancePlanCatalog {
+  plan_name: string;
+  copay_amount: number;
+  policy_type: string;
+  annual_deductible: number;
+  out_of_pocket_max: number;
+  insurance_providers: {
+    name: string;
+    network_type: string;
+  } | null;
+}
+
+interface EnrollmentPlan {
+  remaining_balance: number | null;
+  catalog_plan_id: number;
+  insurance_plan_catalog: InsurancePlanCatalog | null;
+}
+
 const timeSlots = [
   "9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM",
   "11:00 AM", "11:30 AM", "1:00 PM", "1:30 PM",
@@ -40,7 +59,7 @@ const timeSlots = [
 ];
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, enrollmentLoading, hasEnrollment } = useAuth();
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +79,8 @@ const Dashboard = () => {
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [apptToCancel, setApptToCancel] = useState<Appointment | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [enrollmentPlan, setEnrollmentPlan] = useState<EnrollmentPlan | null>(null);
 
   const fetchAppointments = async () => {
     if (!user) {
@@ -131,6 +152,47 @@ const Dashboard = () => {
   useEffect(() => {
     fetchAppointments();
     fetchProviders();
+    // Load plan summary for the header card.
+    const loadPlan = async () => {
+      if (!user) {
+        setEnrollmentPlan(null);
+        return;
+      }
+
+      setPlanLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("insurance_plans")
+          .select(
+            `
+            remaining_balance,
+            catalog_plan_id,
+            insurance_plan_catalog (
+              plan_name,
+              copay_amount,
+              policy_type,
+              annual_deductible,
+              out_of_pocket_max,
+              insurance_providers (name, network_type)
+            )
+          `,
+          )
+          .eq("user_id", user.user_id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching enrollment plan:", error);
+          setEnrollmentPlan(null);
+          return;
+        }
+
+        setEnrollmentPlan((data as EnrollmentPlan | null) ?? null);
+      } finally {
+        setPlanLoading(false);
+      }
+    };
+
+    void loadPlan();
   }, [user]);
 
   const upcoming = appointments.filter((a) => a.status === "scheduled");
@@ -315,29 +377,77 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          to="/profile"
-          className="glass-card rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md transition-shadow"
-        >
-          <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-            <DollarSign className="w-5 h-5 text-secondary-foreground" />
+      <div className="glass-card rounded-xl p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Insurance</p>
+            <p className="text-lg font-semibold text-foreground">
+              {planLoading
+                ? "Loading..."
+                : enrollmentPlan?.insurance_plan_catalog?.plan_name ?? (hasEnrollment ? "Plan unavailable" : "Select a plan")}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {!enrollmentLoading && (
+                <Badge variant={hasEnrollment ? "default" : "outline"}>
+                  {hasEnrollment ? "Enrolled" : "Not enrolled"}
+                </Badge>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {enrollmentPlan?.insurance_plan_catalog?.policy_type
+                  ? `Type: ${enrollmentPlan.insurance_plan_catalog.policy_type}`
+                  : ""}
+              </span>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-xl font-bold text-foreground">${user?.total_balance_due?.toFixed(0) ?? "0"}</p>
+
+          <div className="text-right">
             <p className="text-xs text-muted-foreground">Remaining balance</p>
+            <p className="text-xl font-bold text-foreground">
+              ${user?.total_balance_due?.toFixed(0) ?? "0"}
+            </p>
           </div>
-        </Link>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border/60 bg-card px-3 py-2">
+            <p className="text-xs text-muted-foreground">Upcoming appointments</p>
+            <p className="text-sm font-semibold text-foreground">{upcoming.length}</p>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-card px-3 py-2">
+            <p className="text-xs text-muted-foreground">Past appointments</p>
+            <p className="text-sm font-semibold text-foreground">{past.length}</p>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-card px-3 py-2">
+            <p className="text-xs text-muted-foreground">Total copays</p>
+            <p className="text-sm font-semibold text-foreground">
+              ${user?.total_copay_amounts?.toFixed(0) ?? "0"}
+            </p>
+          </div>
+        </div>
+
+        {user?.health_profile && (
+          <div className="rounded-lg border border-border/60 bg-card px-3 py-2">
+            <p className="text-xs text-muted-foreground">Health profile</p>
+            <p className="text-sm text-foreground mt-1">
+              {user.health_profile.length > 90 ? `${user.health_profile.slice(0, 90)}...` : user.health_profile}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
         <Link
           to="/profile"
-          className="glass-card rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md transition-shadow"
+          className="glass-card rounded-xl p-4 flex items-center justify-between gap-3 hover:shadow-md transition-shadow"
         >
-          <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-            <User className="w-5 h-5 text-secondary-foreground" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-semibold text-foreground">My Medical</p>
-            <p className="text-xs text-muted-foreground">Profile</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+              <User className="w-5 h-5 text-secondary-foreground" />
+            </div>
+            <div className="flex flex-col">
+              <p className="text-sm font-semibold text-foreground">My Medical</p>
+              <p className="text-xs text-muted-foreground">Insurance plan & profile</p>
+            </div>
           </div>
         </Link>
       </div>
@@ -386,7 +496,7 @@ const Dashboard = () => {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Upcoming
+            Upcoming ({upcoming.length})
           </button>
           <button
             onClick={() => setTab("past")}
@@ -396,12 +506,26 @@ const Dashboard = () => {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Past
+            Past ({past.length})
           </button>
         </div>
 
         <div className="space-y-2">
-          {(tab === "upcoming" ? upcoming : past).map((appt) => (
+          {(
+            tab === "upcoming" ? upcoming : past
+          ).length === 0 ? (
+            <div className="glass-card rounded-xl p-5 border border-border/60">
+              <p className="text-sm font-medium text-foreground">
+                {tab === "upcoming" ? "No upcoming appointments" : "No past appointments"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {tab === "upcoming"
+                  ? "Schedule an appointment to get started."
+                  : "Once you’ve had appointments, they’ll show up here."}
+              </p>
+            </div>
+          ) : (
+            (tab === "upcoming" ? upcoming : past).map((appt) => (
             <div
               key={appt.appt_id}
               className="flex items-center gap-3 px-4 py-3 rounded-lg bg-card border border-border hover:shadow-sm transition-shadow cursor-pointer"
@@ -414,6 +538,11 @@ const Dashboard = () => {
               )}
 
               <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant={tab === "upcoming" ? "secondary" : "outline"}>
+                    {tab === "upcoming" ? "Scheduled" : "Completed"}
+                  </Badge>
+                </div>
                 <p className="text-sm font-medium text-foreground">
                   {format(new Date(appt.date_time), "M/d/yy")} at{" "}
                   {format(new Date(appt.date_time), "h:mm a")}
@@ -436,7 +565,8 @@ const Dashboard = () => {
 
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
