@@ -24,7 +24,7 @@ interface AppointmentTransaction {
   } | null;
 }
 
-// hard coded user until we have user log in 
+// hard coded user until we have users log in and use their info
 const CHAD_USER_ID = 1;
 
 const Transactions = () => {
