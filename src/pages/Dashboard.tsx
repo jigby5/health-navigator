@@ -278,6 +278,47 @@ const Dashboard = () => {
     const appointmentDate = new Date(scheduleDate);
     appointmentDate.setHours(hours, parseInt(minStr), 0, 0);
 
+    // 🚫 block weekends
+    const day = appointmentDate.getDay();
+    if (day === 0 || day === 6) {
+      toast({
+        title: "Invalid date",
+        description: "Appointments must be scheduled on weekdays.",
+        variant: "destructive",
+      });
+      setSaving(false);
+      return;
+    }
+
+    // 🚫 block past time
+    if (appointmentDate < new Date()) {
+      toast({
+        title: "Invalid time",
+        description: "You cannot book an appointment in the past.",
+        variant: "destructive",
+      });
+      setSaving(false);
+      return;
+    }
+      const alreadyBooked = appointments.some((appt) => {
+    return (
+      appt.doctor_id === parseInt(selectedDoctorId) &&
+      appt.status === "scheduled" &&
+      new Date(appt.date_time).getTime() === appointmentDate.getTime()
+    );
+  });
+
+  if (alreadyBooked) {
+    toast({
+      title: "Time unavailable",
+      description: "That provider already has an appointment at that time.",
+      variant: "destructive",
+    });
+    setSaving(false);
+    return;
+  }
+
+
     const { data, error } = await supabase
       .from("appointments")
       .insert({
