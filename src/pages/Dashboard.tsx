@@ -313,7 +313,7 @@ const Dashboard = () => {
       {/* Quick Actions Row */}
       <div className="grid grid-cols-2 gap-3">
         <Link
-          to="/profile"
+          to="/transactions"
           className="glass-card rounded-xl p-4 flex flex-col items-center gap-2 hover:shadow-md transition-shadow"
         >
           <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">

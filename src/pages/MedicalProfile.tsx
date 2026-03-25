@@ -1,5 +1,6 @@
 import { Shield, Users, CreditCard, Stethoscope, Edit, Info, Calendar, Phone } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Tooltip,
   TooltipContent,
@@ -157,10 +158,19 @@ const MedicalProfile = () => {
       </div>
 
       {/* Quick Action */}
-      <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity">
-        <Calendar className="w-4 h-4" />
-        Schedule an Appointment
-      </button>
+      <div className="space-y-3">
+        <Link
+          to="/transactions"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
+        >
+          <CreditCard className="w-4 h-4" />
+          View Past Transactions
+        </Link>
+        <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity">
+          <Calendar className="w-4 h-4" />
+          Schedule an Appointment
+        </button>
+      </div>
     </div>
   );
 };

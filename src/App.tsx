@@ -7,6 +7,7 @@ import AppHeader from "@/components/AppHeader";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import MedicalProfile from "./pages/MedicalProfile";
+import Transactions from "./pages/Transactions";
 import Resources from "./pages/Resources";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<MedicalProfile />} />
+          <Route path="/transactions" element={<Transactions />} />
           <Route path="/resources" element={<Resources />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
