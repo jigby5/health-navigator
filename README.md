@@ -16,7 +16,7 @@ Easy Health is a single-dashboard application that helps people understand and m
 | **Backend / API**     | Supabase (PostgREST API)                                                                                                                  |
 | **Database**          | PostgreSQL (hosted via Supabase)                                                                                                          |
 | **AI Assistant**      | Anthropic Claude API (claude-sonnet-4), proxied via local Express server                                                                  |
-| **Authentication**    | Not used for login in the current vertical slice; app uses a fixed user context. Supabase Auth is available in the client for future use. |
+| **Authentication**    | Email/password signup + login via a custom `users` table (hashed password); after signup/login the user selects an insurance plan. Supabase Auth is not used yet. |
 | **External Services** | Supabase (database, API, optional auth), Anthropic Claude API (AI assistant)                                                              |
 
 ---
@@ -233,6 +233,11 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 5. **When a user selects a healthcare scenario (e.g., urgent care vs emergency room), the system shall guide the user through a decision flow explaining appropriate options.**
 6. **While personalized guidance is being generated, the system shall display a loading or progress indicator.**
 7. **While the system is unable to retrieve up-to-date insurance or cost information, the system shall notify the user and provide general guidance instead.**
+8. **After account creation (or login), the system shall prompt the user to select an insurance plan from a dropdown list.**
+9. **After a plan is selected, the system shall store the user’s enrollment (selected plan) in PostgreSQL so that the selected coverage is persistent.**
+10. **When the user updates their insurance plan via the “Change plan” flow in My Profile, the system shall update all plan-dependent profile details (carrier, copay, plan type/network) and persist the new selection.**
+11. **The system shall provide a functional AI assistant powered by Anthropic Claude that generates personalized answers using the user’s enrolled plan data.**
+12. **The system shall allow a user to create a new account (email/password) and use the app with persistent plan selection.**
 
 ### Incomplete
 
@@ -251,12 +256,14 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 
 The Dashboard page implements the core working features of the vertical slice:
 
-- **Balance summary**: Displays the user's remaining balance and copay totals pulled from the database. Not Working
+- **Balance summary**: Displays the user's remaining balance and total copays pulled from PostgreSQL (and updated based on the enrolled insurance plan).
 - **Quick access tiles**: Provides shortcuts to the user's medical profile and related sections.
+- **Per-member overview**: Shows the enrolled insurance plan (carrier + plan name/type), enrollment status, health profile snippet, appointment counts, and next appointment.
 - **Next Appointment card**: Shows the user's next scheduled appointment with **date, time, doctor, and facility**, plus actions to **reschedule** or **cancel**.
 - **Upcoming & Past appointments list**: Lists all appointments grouped into **Upcoming** (scheduled) and **Past** (completed), with each item showing the **date, time (for upcoming), and provider information**.
 - **Appointment details dialog**: Allows users to open an appointment to view **notes**, inspect **doctor information**, and take actions such as **reschedule** or **cancel** when applicable.
 - **Doctor information dialog**: Shows the selected provider's **name, facility, and specialty**.
 - **Schedule new appointment dialog**: Lets users choose a **provider, date, time, and optional notes** to create a new appointment, which is then saved to the database.
 - **Cancellation confirmation dialog**: Confirms when a user cancels an appointment and persists the updated status in the database.
-- **AI Assistant**: Answers personalized insurance and healthcare questions using the Claude API. Dynamically pulls the user's plan details, in-network doctors, and upcoming appointments from the database to provide contextual answers.
+- **AI Assistant**: Functional Anthropic Claude assistant (via the local Express proxy). Answers personalized insurance and healthcare questions using the user's enrolled plan details, in-network doctors, and upcoming appointments from the database.
+- **Coverage plan selection + customization**: Users select an insurance plan during onboarding, and can later change it from My Profile; the app updates the displayed plan details based on the selected catalog entry.
