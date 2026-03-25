@@ -46,7 +46,7 @@ Your expertise covers:
 
 Guidelines:
 - Always explain things in plain, non-technical language
-- Be warm, reassuring, and patient — health insurance is confusing for most people
+- Be warm, reassuring, and patient � health insurance is confusing for most people
 - Give specific, actionable answers
 - When relevant, reference the user's specific plan details provided below
 - If asked about something outside health insurance/healthcare, gently redirect
@@ -98,7 +98,7 @@ const Index = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "Welcome! 👋 I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
+      text: "Welcome! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
       sources: [],
     },
   ]);
@@ -232,14 +232,14 @@ const Index = () => {
           setMessages([
             {
               role: "assistant",
-              text: `Welcome, ${userData.first_name}! 👋 I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
+              text: `Welcome, ${userData.first_name}! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
               sources: [],
             },
           ]);
         }
       } catch (err) {
         console.error("Failed to fetch user profile:", err);
-        // App still works — falls back to generic prompt
+        // App still works � falls back to generic prompt
       }
     };
 
