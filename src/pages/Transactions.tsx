@@ -46,7 +46,7 @@ const Transactions = () => {
           .order("date_time", { ascending: false }),
         supabase
           .from("insurance_plans")
-          .select("copay_amount, remaining_balance")
+          .select("remaining_balance, insurance_plan_catalog(copay_amount)")
           .eq("user_id", CHAD_USER_ID)
           .single(),
       ]);
@@ -69,7 +69,7 @@ const Transactions = () => {
           variant: "destructive",
         });
       } else {
-        setCopayAmount(planResult.data?.copay_amount ?? 0);
+        setCopayAmount(planResult.data?.insurance_plan_catalog?.copay_amount ?? 0);
         setRemainingBalance(planResult.data?.remaining_balance ?? 0);
       }
 

@@ -1,5 +1,6 @@
-import { Shield, CreditCard, Stethoscope, RefreshCw, Info, Calendar, Phone } from "lucide-react";
+ï»¿import { Shield, CreditCard, Stethoscope, RefreshCw, Info, Calendar, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Tooltip,
   TooltipContent,
@@ -176,16 +177,16 @@ const MedicalProfile = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Carrier</p>
-            <p className="text-sm font-medium text-foreground">{provider?.name ?? "—"}</p>
+            <p className="text-sm font-medium text-foreground">{provider?.name ?? "â€”"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Plan name</p>
-            <p className="text-sm font-medium text-foreground">{catalog?.plan_name ?? "—"}</p>
+            <p className="text-sm font-medium text-foreground">{catalog?.plan_name ?? "â€”"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Plan Type</p>
             <div className="flex items-center gap-1">
-              <span className="text-sm font-medium text-foreground">{catalog?.policy_type ?? "—"}</span>
+              <span className="text-sm font-medium text-foreground">{catalog?.policy_type ?? "â€”"}</span>
               <Tooltip>
                 <TooltipTrigger>
                   <Info className="w-3.5 h-3.5 text-muted-foreground" />
@@ -228,7 +229,7 @@ const MedicalProfile = () => {
                 </TooltipContent>
               </Tooltip>
             </p>
-            <p className="text-sm font-medium text-foreground">${catalog?.copay_amount?.toFixed(2) ?? "—"} specialist</p>
+            <p className="text-sm font-medium text-foreground">${catalog?.copay_amount?.toFixed(2) ?? "â€”"} specialist</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -244,15 +245,15 @@ const MedicalProfile = () => {
                 </TooltipContent>
               </Tooltip>
             </p>
-            <p className="text-sm font-medium text-foreground">{provider?.network_type ?? "—"}</p>
+            <p className="text-sm font-medium text-foreground">{provider?.network_type ?? "â€”"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Out-of-pocket max (plan year)</p>
-            <p className="text-sm font-medium text-foreground">${catalog?.out_of_pocket_max?.toFixed(2) ?? "—"}</p>
+            <p className="text-sm font-medium text-foreground">${catalog?.out_of_pocket_max?.toFixed(2) ?? "â€”"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Remaining balance (plan)</p>
-            <p className="text-sm font-medium text-foreground">${plan?.remaining_balance?.toFixed(2) ?? "—"}</p>
+            <p className="text-sm font-medium text-foreground">${plan?.remaining_balance?.toFixed(2) ?? "â€”"}</p>
           </div>
         </div>
       </div>
@@ -279,10 +280,19 @@ const MedicalProfile = () => {
         ))}
       </div>
 
-      <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity">
-        <Calendar className="w-4 h-4" />
-        Schedule an Appointment
-      </button>
+      <div className="space-y-3">
+        <Link
+          to="/transactions"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
+        >
+          <CreditCard className="w-4 h-4" />
+          View Past Transactions
+        </Link>
+        <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:opacity-90 transition-opacity">
+          <Calendar className="w-4 h-4" />
+          Schedule an Appointment
+        </button>
+      </div>
     </div>
   );
 };
