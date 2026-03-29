@@ -1,9 +1,11 @@
 -- Seed Data for Easy Health
 -- Matches the existing UI for persona "Chad"
 
--- User: Chad
-INSERT INTO public.users (user_id, email, password_hash, first_name, last_name, health_profile, total_balance_due, total_copay_amounts)
-VALUES (1, 'chad@example.com', '2b915e4cf1f2e1d650abf106931a85c4cd3ec49a381d0acb006db43ef9988063', 'Chad', 'Johnson', 'No known allergies. Peanut sensitivity.', 67.00, 25.00);
+-- Users
+INSERT INTO public.users (user_id, email, password_hash, first_name, last_name, role, health_profile, total_balance_due, total_copay_amounts)
+VALUES
+(1, 'chad@example.com', '2b915e4cf1f2e1d650abf106931a85c4cd3ec49a381d0acb006db43ef9988063', 'Chad', 'Johnson', 'user', 'No known allergies. Peanut sensitivity.', 67.00, 25.00),
+(2, 'admin@example.com', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'Admin', 'User', 'admin', NULL, 0, 0);
 
 -- Insurance Providers (4 carriers; 3 catalog plans each in insurance_plan_catalog)
 INSERT INTO public.insurance_providers (provider_id, name, network_type) VALUES

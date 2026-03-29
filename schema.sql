@@ -1,6 +1,9 @@
 -- Easy Health Database Schema
 -- Based on ERD: USER, INSURANCE_PLAN, INSURANCE_PROVIDER, HEALTHCARE_PROVIDER, APPOINTMENT, ARTICLE, AI_CHATS
 
+-- Role enum
+CREATE TYPE public.user_role AS ENUM ('user', 'admin');
+
 -- Users table (public profile, no auth dependency)
 CREATE TABLE public.users (
   user_id SERIAL PRIMARY KEY,
@@ -8,6 +11,7 @@ CREATE TABLE public.users (
   password_hash TEXT NOT NULL,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
+  role public.user_role NOT NULL DEFAULT 'user',
   health_profile TEXT,
   total_balance_due FLOAT DEFAULT 0,
   total_copay_amounts FLOAT DEFAULT 0
