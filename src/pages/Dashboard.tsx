@@ -1,8 +1,8 @@
 import { Calendar, DollarSign, User, Clock, Star, ChevronRight, Plus } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, isBefore, isSameDay, startOfDay } from "date-fns";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,6 +12,16 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getAvailableTimeSlotLabels,
+  getFullDayBlockedDates,
+  isWeekend,
+  type ScheduleBlockRow,
+  type BusyAppointment,
+} from "@/lib/appointmentSlots";
+
+const SLOT_UNAVAILABLE =
+  "That time is not available for this provider (blocked schedule or an existing appointment).";
 
 interface Appointment {
   appt_id: number;
@@ -81,6 +91,36 @@ const Dashboard = () => {
   const [apptToCancel, setApptToCancel] = useState<Appointment | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [enrollmentPlan, setEnrollmentPlan] = useState<EnrollmentPlan | null>(null);
+  const [doctorBlocks, setDoctorBlocks] = useState<ScheduleBlockRow[]>([]);
+  const [doctorBusyAppointments, setDoctorBusyAppointments] = useState<BusyAppointment[]>([]);
+
+  const loadDoctorAvailability = async (doctorId: number) => {
+    const [blocksRes, apptsRes] = await Promise.all([
+      supabase
+        .from("provider_schedule_blocks")
+        .select("start_at, end_at, is_full_day")
+        .eq("doctor_id", doctorId),
+      supabase
+        .from("appointments")
+        .select("appt_id, date_time")
+        .eq("doctor_id", doctorId)
+        .eq("status", "scheduled"),
+    ]);
+
+    if (blocksRes.error) {
+      console.error("Error loading provider blocks:", blocksRes.error);
+      setDoctorBlocks([]);
+    } else {
+      setDoctorBlocks((blocksRes.data as ScheduleBlockRow[]) ?? []);
+    }
+
+    if (apptsRes.error) {
+      console.error("Error loading doctor appointments:", apptsRes.error);
+      setDoctorBusyAppointments([]);
+    } else {
+      setDoctorBusyAppointments((apptsRes.data as BusyAppointment[]) ?? []);
+    }
+  };
 
   const fetchAppointments = async () => {
     if (!user) {
@@ -195,6 +235,78 @@ const Dashboard = () => {
     void loadPlan();
   }, [user]);
 
+  useEffect(() => {
+    if (!scheduleOpen) {
+      return;
+    }
+    if (!selectedDoctorId) {
+      setDoctorBlocks([]);
+      setDoctorBusyAppointments([]);
+      return;
+    }
+    void loadDoctorAvailability(Number.parseInt(selectedDoctorId, 10));
+  }, [scheduleOpen, selectedDoctorId]);
+
+  useEffect(() => {
+    if (!rescheduleOpen || selectedAppt?.doctor_id == null) {
+      return;
+    }
+    void loadDoctorAvailability(selectedAppt.doctor_id);
+  }, [rescheduleOpen, selectedAppt?.doctor_id]);
+
+  const fullDayBlockedCalendarDates = useMemo(() => getFullDayBlockedDates(doctorBlocks), [doctorBlocks]);
+
+  const scheduleAvailableSlots = useMemo(() => {
+    if (!scheduleDate || !selectedDoctorId) {
+      return [];
+    }
+    return getAvailableTimeSlotLabels(
+      scheduleDate,
+      timeSlots,
+      doctorBlocks,
+      doctorBusyAppointments,
+    );
+  }, [scheduleDate, selectedDoctorId, doctorBlocks, doctorBusyAppointments]);
+
+  const rescheduleAvailableSlots = useMemo(() => {
+    if (!newDate || selectedAppt?.doctor_id == null) {
+      return [];
+    }
+    return getAvailableTimeSlotLabels(
+      newDate,
+      timeSlots,
+      doctorBlocks,
+      doctorBusyAppointments,
+      selectedAppt.appt_id,
+    );
+  }, [newDate, selectedAppt, doctorBlocks, doctorBusyAppointments]);
+
+  useEffect(() => {
+    if (scheduleTime && !scheduleAvailableSlots.includes(scheduleTime)) {
+      setScheduleTime("");
+    }
+  }, [scheduleAvailableSlots, scheduleTime]);
+
+  useEffect(() => {
+    if (newTime && !rescheduleAvailableSlots.includes(newTime)) {
+      setNewTime("");
+    }
+  }, [rescheduleAvailableSlots, newTime]);
+
+  const isDateUnavailableOnCalendar = (date: Date) => {
+    const today = startOfDay(new Date());
+    if (isBefore(startOfDay(date), today)) {
+      return true;
+    }
+    if (isWeekend(date)) {
+      return true;
+    }
+    if (fullDayBlockedCalendarDates.some((d) => isSameDay(d, date))) {
+      return true;
+    }
+    return false;
+  };
+
   const upcoming = appointments.filter((a) => a.status === "scheduled");
   const past = appointments.filter((a) => a.status === "completed");
   const nextAppt = upcoming[0];
@@ -221,6 +333,16 @@ const Dashboard = () => {
 
   const handleReschedule = async () => {
     if (!selectedAppt || !newDate || !newTime) return;
+
+    if (!rescheduleAvailableSlots.includes(newTime)) {
+      toast({
+        title: "Time unavailable",
+        description: SLOT_UNAVAILABLE,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSaving(true);
 
     const [timePart, ampm] = newTime.split(" ");
@@ -231,6 +353,26 @@ const Dashboard = () => {
 
     const updatedDate = new Date(newDate);
     updatedDate.setHours(hours, parseInt(minStr), 0, 0);
+
+    if (isWeekend(updatedDate)) {
+      toast({
+        title: "Invalid date",
+        description: "Appointments must be scheduled on weekdays.",
+        variant: "destructive",
+      });
+      setSaving(false);
+      return;
+    }
+
+    if (updatedDate < new Date()) {
+      toast({
+        title: "Invalid time",
+        description: "You cannot book an appointment in the past.",
+        variant: "destructive",
+      });
+      setSaving(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("appointments")
@@ -252,6 +394,8 @@ const Dashboard = () => {
       );
     }
 
+    void loadDoctorAvailability(selectedAppt.doctor_id);
+
     setRescheduleOpen(false);
     toast({ title: "Rescheduled!", description: `Appointment moved to ${format(updatedDate, "M/d/yy 'at' h:mm a")}` });
   };
@@ -261,6 +405,15 @@ const Dashboard = () => {
       toast({
         title: "Missing information",
         description: "Please choose a provider, date, and time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!scheduleAvailableSlots.includes(scheduleTime)) {
+      toast({
+        title: "Time unavailable",
+        description: SLOT_UNAVAILABLE,
         variant: "destructive",
       });
       return;
@@ -278,7 +431,6 @@ const Dashboard = () => {
     const appointmentDate = new Date(scheduleDate);
     appointmentDate.setHours(hours, parseInt(minStr), 0, 0);
 
-    // 🚫 block weekends
     const day = appointmentDate.getDay();
     if (day === 0 || day === 6) {
       toast({
@@ -290,7 +442,6 @@ const Dashboard = () => {
       return;
     }
 
-    // 🚫 block past time
     if (appointmentDate < new Date()) {
       toast({
         title: "Invalid time",
@@ -300,24 +451,6 @@ const Dashboard = () => {
       setSaving(false);
       return;
     }
-      const alreadyBooked = appointments.some((appt) => {
-    return (
-      appt.doctor_id === parseInt(selectedDoctorId) &&
-      appt.status === "scheduled" &&
-      new Date(appt.date_time).getTime() === appointmentDate.getTime()
-    );
-  });
-
-  if (alreadyBooked) {
-    toast({
-      title: "Time unavailable",
-      description: "That provider already has an appointment at that time.",
-      variant: "destructive",
-    });
-    setSaving(false);
-    return;
-  }
-
 
     const { data, error } = await supabase
       .from("appointments")
@@ -349,6 +482,8 @@ const Dashboard = () => {
         )
       );
     }
+
+    void loadDoctorAvailability(Number.parseInt(selectedDoctorId, 10));
 
     setScheduleOpen(false);
 
@@ -637,7 +772,11 @@ const Dashboard = () => {
                 mode="single"
                 selected={newDate}
                 onSelect={setNewDate}
-                disabled={(date) => date < new Date()}
+                disabled={(date) => isDateUnavailableOnCalendar(date)}
+                modifiers={{ fullDayBlocked: fullDayBlockedCalendarDates }}
+                modifiersClassNames={{
+                  fullDayBlocked: "bg-destructive/15 text-foreground border border-destructive/40 font-medium",
+                }}
                 className={cn("p-3 pointer-events-auto rounded-md border")}
               />
             </div>
@@ -648,20 +787,28 @@ const Dashboard = () => {
                   <SelectValue placeholder="Choose a time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map((slot) => (
+                  {rescheduleAvailableSlots.map((slot) => (
                     <SelectItem key={slot} value={slot}>
                       {slot}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {newDate && rescheduleAvailableSlots.length === 0 && (
+                <p className="text-xs text-destructive mt-2">
+                  No times available on this date for this provider. Choose another date.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRescheduleOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleReschedule} disabled={saving || !newDate || !newTime}>
+            <Button
+              onClick={handleReschedule}
+              disabled={saving || !newDate || !newTime || rescheduleAvailableSlots.length === 0}
+            >
               {saving ? "Saving..." : "Confirm Reschedule"}
             </Button>
           </DialogFooter>
@@ -797,9 +944,16 @@ const Dashboard = () => {
                 mode="single"
                 selected={scheduleDate}
                 onSelect={setScheduleDate}
-                disabled={(date) => date < new Date()}
+                disabled={(date) => !selectedDoctorId || isDateUnavailableOnCalendar(date)}
+                modifiers={{ fullDayBlocked: fullDayBlockedCalendarDates }}
+                modifiersClassNames={{
+                  fullDayBlocked: "bg-destructive/15 text-foreground border border-destructive/40 font-medium",
+                }}
                 className={cn("p-3 pointer-events-auto rounded-md border")}
               />
+              {!selectedDoctorId && (
+                <p className="text-xs text-muted-foreground mt-2">Select a provider to enable the calendar.</p>
+              )}
             </div>
 
             <div>
@@ -809,13 +963,18 @@ const Dashboard = () => {
                   <SelectValue placeholder="Choose a time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map((slot) => (
+                  {scheduleAvailableSlots.map((slot) => (
                     <SelectItem key={slot} value={slot}>
                       {slot}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedDoctorId && scheduleDate && scheduleAvailableSlots.length === 0 && (
+                <p className="text-xs text-destructive mt-2">
+                  No times available on this date for this provider. Choose another date.
+                </p>
+              )}
             </div>
 
             <div>
@@ -834,7 +993,13 @@ const Dashboard = () => {
             </Button>
             <Button
               onClick={handleScheduleAppointment}
-              disabled={saving || !selectedDoctorId || !scheduleDate || !scheduleTime}
+              disabled={
+                saving ||
+                !selectedDoctorId ||
+                !scheduleDate ||
+                !scheduleTime ||
+                scheduleAvailableSlots.length === 0
+              }
             >
               {saving ? "Saving..." : "Confirm Appointment"}
             </Button>

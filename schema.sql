@@ -68,6 +68,17 @@ CREATE TABLE public.appointments (
   user_notes TEXT
 );
 
+-- Provider schedule blocks (OOO / partial-day unavailability)
+CREATE TABLE public.provider_schedule_blocks (
+  block_id SERIAL PRIMARY KEY,
+  doctor_id INT NOT NULL REFERENCES public.healthcare_providers(doctor_id) ON DELETE CASCADE,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  is_full_day BOOLEAN NOT NULL DEFAULT false,
+  reason TEXT,
+  CONSTRAINT provider_schedule_blocks_end_after_start CHECK (end_at > start_at)
+);
+
 -- Articles
 CREATE TABLE public.articles (
   article_id SERIAL PRIMARY KEY,
@@ -105,3 +116,6 @@ ALTER TABLE public.insurance_plans ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read on insurance_plans" ON public.insurance_plans FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on insurance_plans" ON public.insurance_plans FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update on insurance_plans" ON public.insurance_plans FOR UPDATE USING (true) WITH CHECK (true);
+
+ALTER TABLE public.provider_schedule_blocks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on provider_schedule_blocks" ON public.provider_schedule_blocks FOR SELECT USING (true);

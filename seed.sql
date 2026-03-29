@@ -58,6 +58,16 @@ INSERT INTO public.appointments (appt_id, user_id, doctor_id, date_time, status,
 (4, 1, 3, '2026-01-05 11:00:00-05', 'completed', NULL),
 (5, 1, 4, '2025-12-23 15:00:00-05', 'completed', NULL);
 
+-- Dr. Carsonian: first & second Friday of May 2026 (full-day OOO)
+INSERT INTO public.provider_schedule_blocks (block_id, doctor_id, start_at, end_at, is_full_day, reason) VALUES
+(1, 1, '2026-05-01 00:00:00-05', '2026-05-02 00:00:00-05', true, 'Out of office'),
+(2, 1, '2026-05-08 00:00:00-05', '2026-05-09 00:00:00-05', true, 'Out of office');
+
+SELECT setval(
+  pg_get_serial_sequence('public.provider_schedule_blocks', 'block_id'),
+  (SELECT COALESCE(MAX(block_id), 1) FROM public.provider_schedule_blocks)
+);
+
 -- Articles
 INSERT INTO public.articles (article_id, title, summary, category, source_url) VALUES
 (1, 'Understanding Your Copay', 'Learn how copayments work and what to expect at each visit.', 'Insurance', 'https://example.com/copay'),
