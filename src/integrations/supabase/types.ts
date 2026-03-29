@@ -130,6 +130,41 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_schedule_blocks: {
+        Row: {
+          block_id: number
+          doctor_id: number
+          end_at: string
+          is_full_day: boolean
+          reason: string | null
+          start_at: string
+        }
+        Insert: {
+          block_id?: number
+          doctor_id: number
+          end_at: string
+          is_full_day?: boolean
+          reason?: string | null
+          start_at: string
+        }
+        Update: {
+          block_id?: number
+          doctor_id?: number
+          end_at?: string
+          is_full_day?: boolean
+          reason?: string | null
+          start_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_schedule_blocks_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "healthcare_providers"
+            referencedColumns: ["doctor_id"]
+          },
+        ]
+      }
       insurance_plan_catalog: {
         Row: {
           annual_deductible: number

@@ -2,7 +2,7 @@
 
 ## 1. App Summary
 
-Easy Health is a single-dashboard application that helps people understand and manage their health insurance and care in one place. The core problem it solves is the fragmentation of health information — members currently have to juggle multiple portals to track balances, copays, appointments, and providers. The primary user is a health plan member, whether an individual or a family, who wants a unified view of their coverage and care. Easy Health provides a **Dashboard** showing balance due and the next appointment, an **Appointments** section for viewing, scheduling, and rescheduling upcoming and past visits, a **Medical Profile** with plan details and assigned doctors, and a **Resources** section with health articles. The app also features an AI assistant on the home page powered by Claude to answer personalized insurance questions. All actions — including rescheduling — persist to a database and are reflected immediately after a page refresh.
+Easy Health is a single-dashboard application that helps people understand and manage their health insurance and care in one place. The core problem it solves is the fragmentation of health information — members currently have to juggle multiple portals to track balances, copays, appointments, and providers. The primary user is a health plan member, whether an individual or a family, who wants a unified view of their coverage and care. Easy Health provides a **Dashboard** showing balance due and the next appointment, an **Appointments** section for viewing, scheduling, and rescheduling upcoming and past visits, a **Medical Profile** with plan details and assigned doctors, and a **Resources** section with health articles. Scheduling and rescheduling respect **provider unavailability** (blocked dates/times in the database) and **30-minute** visit slots so users cannot pick times that conflict with another patient’s appointment or a blocked period. The app also features an AI assistant on the home page powered by Claude to answer personalized insurance questions. All actions — including rescheduling — persist to a database and are reflected immediately after a page refresh.
 
 ---
 
@@ -238,6 +238,9 @@ This section walks through one end-to-end slice: **rescheduling an appointment**
 10. **When the user updates their insurance plan via the “Change plan” flow in My Profile, the system shall update all plan-dependent profile details (carrier, copay, plan type/network) and persist the new selection.**
 11. **The system shall provide a functional AI assistant powered by Anthropic Claude that generates personalized answers using the user’s enrolled plan data.**
 12. **The system shall allow a user to create a new account (email/password) and use the app with persistent plan selection.**
+13. **The system shall treat each appointment as a fixed-length visit (default 30 minutes) when checking for scheduling conflicts.**
+14. **When a user schedules or reschedules an appointment, the system shall prevent selection of a start time that overlaps (a) another patient’s scheduled appointment with the same provider or (b) a provider schedule block stored in PostgreSQL.**
+15. **When a provider has a full-day unavailability block, the system shall visually distinguish that date on the calendar; for partial-day blocks, the calendar shall remain in the standard style and the time selector shall list only available times.**
 
 ### Incomplete
 
@@ -263,7 +266,8 @@ The Dashboard page implements the core working features of the vertical slice:
 - **Upcoming & Past appointments list**: Lists all appointments grouped into **Upcoming** (scheduled) and **Past** (completed), with each item showing the **date, time (for upcoming), and provider information**.
 - **Appointment details dialog**: Allows users to open an appointment to view **notes**, inspect **doctor information**, and take actions such as **reschedule** or **cancel** when applicable.
 - **Doctor information dialog**: Shows the selected provider's **name, facility, and specialty**.
-- **Schedule new appointment dialog**: Lets users choose a **provider, date, time, and optional notes** to create a new appointment, which is then saved to the database.
+- **Schedule new appointment dialog**: Lets users choose a **provider, date, time, and optional notes** to create a new appointment, which is then saved to the database. Availability uses **30-minute** slots: the time dropdown lists only slots that do not overlap **`provider_schedule_blocks`** (e.g. out-of-office) or **another patient’s scheduled** appointment for that provider. **Full-day** blocks use a distinct calendar style; partial-day blocks keep the normal day styling and only restrict which times appear.
+- **Reschedule appointment dialog**: Same availability rules as scheduling; the current appointment is excluded from conflict checks so it can be moved to a new valid slot.
 - **Cancellation confirmation dialog**: Confirms when a user cancels an appointment and persists the updated status in the database.
 - **AI Assistant**: Functional Anthropic Claude assistant (via the local Express proxy). Answers personalized insurance and healthcare questions using the user's enrolled plan details, in-network doctors, and upcoming appointments from the database.
 - **Coverage plan selection + customization**: Users select an insurance plan during onboarding, and can later change it from My Profile; the app updates the displayed plan details based on the selected catalog entry.
