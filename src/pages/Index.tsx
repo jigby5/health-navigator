@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, ExternalLink, Lightbulb, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchChatUserContext, type ChatUserProfile } from "@/lib/chatUserContext";
+import { buildChatSystemPromptAtRequest } from "@/lib/chatSystemPrompt";
 
 interface Message {
   role: "assistant" | "user";
@@ -9,83 +11,13 @@ interface Message {
   sources?: { label: string; url: string }[];
 }
 
-// Maps to the Anthropic messages API shape
 interface ApiMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-interface UserProfile {
-  firstName: string;
-  lastName: string;
-  planType: string;
-  providerName: string;
-  networkType: string;
-  copayAmount: number;
-  remainingBalance: number;
-  totalBalanceDue: number;
-  doctors: { name: string; specialty: string; facility: string }[];
-  upcomingAppointments: {
-    dateTime: string;
-    doctorName: string;
-    facility: string;
-  }[];
-}
-
-// Fixed user ID for Chad (the demo user)
-const CHAD_USER_ID = 1;
-
-const BASE_SYSTEM_PROMPT = `You are Easy Health Assistant, a friendly and knowledgeable health insurance guide embedded in the Easy Health app.
-
-Your expertise covers:
-- Health insurance concepts: deductibles, copays, coinsurance, out-of-pocket maximums, premiums, in-network vs out-of-network
-- How to use benefits: preventive care, specialist referrals, urgent care vs ER decisions
-- Finding and scheduling care: primary care, specialists, telehealth
-- Claims and billing: how to read an EOB, dispute a claim, understand a medical bill
-- Plan types: HMO, PPO, EPO, HDHP, FSA, HSA
-
-Guidelines:
-- Always explain things in plain, non-technical language
-- Be warm, reassuring, and patient — health insurance is confusing for most people
-- Give specific, actionable answers
-- When relevant, reference the user's specific plan details provided below
-- If asked about something outside health insurance/healthcare, gently redirect
-- Keep responses concise (2-4 paragraphs max) and easy to scan
-- Do NOT recommend specific medications or diagnose medical conditions
-- Always suggest consulting a doctor or plan representative for complex medical/coverage decisions`;
-
-const buildSystemPrompt = (profile: UserProfile | null): string => {
-  if (!profile) return BASE_SYSTEM_PROMPT;
-
-  const doctorList = profile.doctors
-    .map((d) => `  - ${d.name} (${d.specialty}) at ${d.facility}`)
-    .join("\n");
-
-  const apptList = profile.upcomingAppointments.length
-    ? profile.upcomingAppointments
-        .map(
-          (a) =>
-            `  - ${new Date(a.dateTime).toLocaleDateString()} with ${a.doctorName} at ${a.facility}`,
-        )
-        .join("\n")
-    : "  - No upcoming appointments";
-
-  return `${BASE_SYSTEM_PROMPT}
-
-${profile.firstName}'s current account details (use these to give personalized answers):
-- Name: ${profile.firstName} ${profile.lastName}
-- Insurance Provider: ${profile.providerName} (${profile.networkType})
-- Plan Type: ${profile.planType}
-- Copay Amount: $${profile.copayAmount}
-- Remaining Balance: $${profile.remainingBalance}
-- Total Balance Due: $${profile.totalBalanceDue}
-
-In-Network Doctors:
-${doctorList || "  - None on file"}
-
-Upcoming Appointments:
-${apptList}`;
-};
+const GENERIC_WELCOME =
+  "Welcome! I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?";
 
 const suggestedQuestions = [
   "What does my deductible mean?",
@@ -95,160 +27,67 @@ const suggestedQuestions = [
 ];
 
 const Index = () => {
+  const { user, initializing } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "Welcome! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?",
+      text: GENERIC_WELCOME,
       sources: [],
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<ChatUserProfile | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fetch user profile from Supabase on mount
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        // Fetch user + insurance plan + insurance provider
-        const { data: userData } = await supabase
-          .from("users")
-          .select(
-            `
-            first_name,
-            last_name,
-            total_balance_due,
-            total_copay_amounts,
-            insurance_plans (
-              remaining_balance,
-              insurance_plan_catalog (
-                copay_amount,
-                policy_type,
-                annual_deductible,
-                out_of_pocket_max,
-                insurance_providers (
-                  name,
-                  network_type,
-                  provider_id
-                )
-              )
-            )
-          `,
-          )
-          .eq("user_id", CHAD_USER_ID)
-          .single();
+    if (initializing) {
+      return;
+    }
 
-        const planRow = (userData as { insurance_plans?: unknown })?.insurance_plans;
-        const plan = Array.isArray(planRow) ? planRow[0] : planRow;
-        const catalog = plan && typeof plan === "object" && "insurance_plan_catalog" in plan
-          ? (plan as { insurance_plan_catalog: { provider_id?: number } | null }).insurance_plan_catalog
-          : null;
-        const providerId = catalog?.provider_id;
+    if (!user) {
+      setUserProfile(null);
+      setMessages([{ role: "assistant", text: GENERIC_WELCOME, sources: [] }]);
+      return;
+    }
 
-        let doctors: UserProfile["doctors"] = [];
-        if (providerId != null) {
-          const { data: networkData } = await supabase
-            .from("provider_network")
-            .select(
-              `
-              healthcare_providers (
-                full_name,
-                specialty,
-                facility_name
-              )
-            `,
-            )
-            .eq("insurance_provider_id", providerId);
+    if (user.role === "admin") {
+      return;
+    }
 
-          doctors =
-            networkData?.map((n: any) => ({
-              name: n.healthcare_providers.full_name,
-              specialty: n.healthcare_providers.specialty,
-              facility: n.healthcare_providers.facility_name,
-            })) ?? [];
-        }
+    let cancelled = false;
 
-        // Fetch upcoming appointments
-        const { data: apptData } = await supabase
-          .from("appointments")
-          .select(
-            `
-            date_time,
-            healthcare_providers (
-              full_name,
-              facility_name
-            )
-          `,
-          )
-          .eq("user_id", CHAD_USER_ID)
-          .eq("status", "scheduled")
-          .gte("date_time", new Date().toISOString())
-          .order("date_time", { ascending: true })
-          .limit(3);
-
-        const upcomingAppointments =
-          apptData?.map((a: any) => ({
-            dateTime: a.date_time,
-            doctorName: a.healthcare_providers.full_name,
-            facility: a.healthcare_providers.facility_name,
-          })) ?? [];
-
-        if (userData) {
-          const planArr = (userData as { insurance_plans?: unknown }).insurance_plans;
-          const plan = Array.isArray(planArr) ? planArr[0] : planArr;
-          const catalog =
-            plan && typeof plan === "object" && "insurance_plan_catalog" in plan
-              ? (plan as { insurance_plan_catalog: Record<string, unknown> | null }).insurance_plan_catalog
-              : null;
-          const provider =
-            catalog && typeof catalog === "object" && "insurance_providers" in catalog
-              ? (catalog as { insurance_providers: { name?: string; network_type?: string } | null }).insurance_providers
-              : null;
-
-          const profile: UserProfile = {
-            firstName: userData.first_name,
-            lastName: userData.last_name,
-            planType: (catalog?.policy_type as string) ?? "Unknown",
-            providerName: provider?.name ?? "Unknown",
-            networkType: provider?.network_type ?? "Unknown",
-            copayAmount: (catalog?.copay_amount as number) ?? 0,
-            remainingBalance: (plan && typeof plan === "object" && "remaining_balance" in plan
-              ? (plan as { remaining_balance: number }).remaining_balance
-              : 0) ?? 0,
-            totalBalanceDue: userData.total_balance_due ?? 0,
-            doctors,
-            upcomingAppointments,
-          };
-
-          setUserProfile(profile);
-
-          // Update welcome message with user's first name
-          setMessages([
-            {
-              role: "assistant",
-              text: `Welcome, ${userData.first_name}! ?? I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
-              sources: [],
-            },
-          ]);
-        }
-      } catch (err) {
-        console.error("Failed to fetch user profile:", err);
-        // App still works — falls back to generic prompt
+    void fetchChatUserContext(user.user_id).then((profile) => {
+      if (cancelled) {
+        return;
       }
-    };
+      setUserProfile(profile);
+      const first = profile?.firstName ?? user.first_name;
+      setMessages([
+        {
+          role: "assistant",
+          text: `Welcome, ${first}! I'm your Easy Health assistant. I can help you understand your insurance, find doctors, or navigate your health benefits. What would you like to know?`,
+          sources: [],
+        },
+      ]);
+    });
 
-    fetchUserProfile();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [initializing, user]);
+
+  const displayName = userProfile?.firstName ?? user?.first_name;
 
   const handleSend = async (overrideInput?: string) => {
     const text = (overrideInput ?? input).trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading) {
+      return;
+    }
 
     const userMsg: Message = { role: "user", text };
     const updatedMessages = [...messages, userMsg];
@@ -256,15 +95,19 @@ const Index = () => {
     setInput("");
     setIsLoading(true);
 
-    // Build conversation history for the API (exclude the initial greeting)
     const apiHistory: ApiMessage[] = updatedMessages
-      .slice(1) // skip the welcome message
+      .slice(1)
       .map((m) => ({
         role: m.role === "user" ? "user" : "assistant",
         content: m.text,
       }));
 
     try {
+      const systemPrompt = buildChatSystemPromptAtRequest({
+        authUser: user,
+        profile: userProfile,
+      });
+
       const response = await fetch("http://localhost:3001/api/chat", {
         method: "POST",
         headers: {
@@ -273,7 +116,7 @@ const Index = () => {
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: buildSystemPrompt(userProfile),
+          system: systemPrompt,
           messages: apiHistory,
         }),
       });
@@ -313,26 +156,26 @@ const Index = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] max-w-2xl mx-auto">
+    <div className="flex h-[calc(100vh-3.5rem)] max-w-2xl flex-col mx-auto">
       {messages.length <= 1 && (
-        <div className="p-4 animate-slide-up">
+        <div className="animate-slide-up p-4">
           <div className="rounded-xl bg-secondary p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Lightbulb className="w-5 h-5 text-accent" />
+            <div className="mb-2 flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-accent" />
               <h2 className="font-semibold text-secondary-foreground">
-                Start Here{userProfile ? `, ${userProfile.firstName}` : ""}
+                Start Here{displayName ? `, ${displayName}` : ""}
               </h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Not sure where to begin? Try one of these common questions or type
-              your own below.
+            <p className="mb-4 text-sm text-muted-foreground">
+              Not sure where to begin? Try one of these common questions or type your own below.
             </p>
             <div className="flex flex-wrap gap-2">
               {suggestedQuestions.map((q) => (
                 <button
                   key={q}
+                  type="button"
                   onClick={() => handleSend(q)}
-                  className="text-xs px-3 py-1.5 rounded-full bg-card border border-border text-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
                 >
                   {q}
                 </button>
@@ -342,30 +185,28 @@ const Index = () => {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`flex gap-3 animate-fade-in ${msg.role === "user" ? "justify-end" : ""}`}
+            className={`flex animate-fade-in gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
           >
             {msg.role === "assistant" && (
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <Bot className="w-4 h-4 text-primary-foreground" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+                <Bot className="h-4 w-4 text-primary-foreground" />
               </div>
             )}
             <div
               className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === "user"
                   ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border text-card-foreground"
+                  : "border border-border bg-card text-card-foreground"
               }`}
             >
               <p className="whitespace-pre-line">{msg.text}</p>
               {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-border/50 space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Sources:
-                  </span>
+                <div className="mt-3 space-y-1 border-t border-border/50 pt-2">
+                  <span className="text-xs font-medium text-muted-foreground">Sources:</span>
                   {msg.sources.map((s, j) => (
                     <a
                       key={j}
@@ -374,7 +215,7 @@ const Index = () => {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="h-3 w-3" />
                       {s.label}
                     </a>
                   ))}
@@ -382,21 +223,20 @@ const Index = () => {
               )}
             </div>
             {msg.role === "user" && (
-              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shrink-0">
-                <User className="w-4 h-4 text-accent-foreground" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
+                <User className="h-4 w-4 text-accent-foreground" />
               </div>
             )}
           </div>
         ))}
 
-        {/* Loading indicator */}
         {isLoading && (
-          <div className="flex gap-3 animate-fade-in">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-              <Bot className="w-4 h-4 text-primary-foreground" />
+          <div className="flex animate-fade-in gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+              <Bot className="h-4 w-4 text-primary-foreground" />
             </div>
-            <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               <span className="text-sm text-muted-foreground">Thinking...</span>
             </div>
           </div>
@@ -405,8 +245,8 @@ const Index = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 border-t border-border bg-card/60 backdrop-blur-sm">
-        <div className="flex gap-2 items-center">
+      <div className="border-t border-border bg-card/60 p-4 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -415,17 +255,8 @@ const Index = () => {
             disabled={isLoading}
             className="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           />
-          <Button
-            size="icon"
-            onClick={() => handleSend()}
-            disabled={isLoading || !input.trim()}
-            className="shrink-0"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+          <Button size="icon" onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="shrink-0">
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>

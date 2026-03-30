@@ -3,11 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import AppHeader from "@/components/AppHeader";
+import AppShell from "@/components/AppShell";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import AdminOKR from "./pages/AdminOKR";
 import Dashboard from "./pages/Dashboard";
 import MedicalProfile from "./pages/MedicalProfile";
 import Transactions from "./pages/Transactions";
@@ -27,19 +29,23 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
-          <AppHeader />
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/select-plan" element={<SelectPlan />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/profile" element={<MedicalProfile />} />
-              <Route path="/profile/edit" element={<EditProfile />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/resources" element={<Resources />} />
+            <Route path="/admin" element={<AdminProtectedRoute />}>
+              <Route index element={<AdminOKR />} />
             </Route>
-            <Route path="*" element={<NotFound />} />
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/select-plan" element={<SelectPlan />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<MedicalProfile />} />
+                <Route path="/profile/edit" element={<EditProfile />} />
+                <Route path="/transactions" element={<Transactions />} />
+                <Route path="/resources" element={<Resources />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

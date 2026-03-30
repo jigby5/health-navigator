@@ -128,10 +128,10 @@ const EditProfile = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 5) {
       toast({
         title: "Password too short",
-        description: "Your new password must be at least 6 characters long.",
+        description: "Your new password must be at least 5 characters long.",
         variant: "destructive",
       });
       return;

@@ -324,6 +324,7 @@ export type Database = {
           health_profile: string | null
           last_name: string
           password_hash: string
+          role: Database["public"]["Enums"]["user_role"]
           total_balance_due: number | null
           total_copay_amounts: number | null
           user_id: number
@@ -334,6 +335,7 @@ export type Database = {
           health_profile?: string | null
           last_name: string
           password_hash: string
+          role?: Database["public"]["Enums"]["user_role"]
           total_balance_due?: number | null
           total_copay_amounts?: number | null
           user_id?: number
@@ -344,6 +346,7 @@ export type Database = {
           health_profile?: string | null
           last_name?: string
           password_hash?: string
+          role?: Database["public"]["Enums"]["user_role"]
           total_balance_due?: number | null
           total_copay_amounts?: number | null
           user_id?: number
@@ -358,7 +361,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      user_role: "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never

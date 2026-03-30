@@ -65,7 +65,8 @@ const Auth = () => {
   }, [mode]);
 
   if (user) {
-    return <Navigate to={redirectPath} replace />;
+    const destination = user.role === "admin" ? "/admin" : redirectPath;
+    return <Navigate to={destination} replace />;
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -76,6 +77,10 @@ const Auth = () => {
       if (mode === "login") {
         const loggedIn = await login({ email: form.email, password: form.password });
         toast({ title: "Welcome back", description: "You are now logged in." });
+        if (loggedIn.role === "admin") {
+          navigate("/admin", { replace: true });
+          return;
+        }
         const { data: plan } = await supabase
           .from("insurance_plans")
           .select("plan_id")
@@ -211,7 +216,7 @@ const Auth = () => {
                 type="password"
                 value={form.password}
                 onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                minLength={6}
+                minLength={5}
                 required
               />
             </div>

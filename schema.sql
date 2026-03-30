@@ -108,6 +108,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read on users" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on users" ON public.users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update on users" ON public.users FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete on users" ON public.users FOR DELETE USING (true);
 
 ALTER TABLE public.insurance_plan_catalog ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read on insurance_plan_catalog" ON public.insurance_plan_catalog FOR SELECT USING (true);

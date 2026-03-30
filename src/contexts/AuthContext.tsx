@@ -195,6 +195,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         password_hash: passwordHash,
         first_name: trimmedFirstName,
         last_name: trimmedLastName,
+        role: "user",
         health_profile: "",
         total_balance_due: 0,
         total_copay_amounts: 0,
