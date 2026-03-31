@@ -1,85 +1,78 @@
-import { Search, ChevronRight, BookOpen, Brain, Bone, Heart, Baby, Pill } from "lucide-react";
-import { useState } from "react";
+import { Search, BookOpen, Brain, Bone, Heart, Baby, Pill, ExternalLink } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const categories = [
-  { id: "all", label: "All", icon: BookOpen },
-  { id: "mental", label: "Mental Health", icon: Brain },
-  { id: "physical", label: "Physical Injuries", icon: Bone },
-  { id: "heart", label: "Heart & Cardio", icon: Heart },
-  { id: "family", label: "Family Health", icon: Baby },
-  { id: "medication", label: "Medications", icon: Pill },
+  { id: "all",        label: "All",              icon: BookOpen },
+  { id: "mental",     label: "Mental Health",    icon: Brain },
+  { id: "physical",   label: "Physical Injuries",icon: Bone },
+  { id: "heart",      label: "Heart & Cardio",   icon: Heart },
+  { id: "family",     label: "Family Health",    icon: Baby },
+  { id: "medication", label: "Medications",      icon: Pill },
 ];
 
-const articles = [
-  {
-    id: 1,
-    category: "mental",
-    title: "Control Mental Health Before It Gets to You Negatively",
-    summary: "Early signs of stress and anxiety are often overlooked. Learn the 5 daily habits that mental health professionals recommend for building resilience.",
-    source: "CDC",
-  },
-  {
-    id: 2,
-    category: "physical",
-    title: "Broken Bones? Know What Help and Care You Need",
-    summary: "Understanding when to visit urgent care vs. the ER for fractures can save you time and money. Here's a quick decision guide.",
-    source: "Mayo Clinic",
-  },
-  {
-    id: 3,
-    category: "physical",
-    title: "Tummy Hurting? 5 Most Useful Things to Ensure Gut Health",
-    summary: "Digestive issues affect 70 million Americans. These evidence-based tips can help you manage common stomach problems at home.",
-    source: "NIH",
-  },
-  {
-    id: 4,
-    category: "mental",
-    title: "Sleeplessness Is No Joke: 5 Ways to Home-Remedy",
-    summary: "Poor sleep is linked to chronic disease. Try these clinically supported methods before considering medication.",
-    source: "Sleep Foundation",
-  },
-  {
-    id: 5,
-    category: "heart",
-    title: "Understanding Your Blood Pressure Numbers",
-    summary: "High blood pressure rarely has symptoms. Learn what your numbers mean and when to talk to your doctor about management options.",
-    source: "AHA",
-  },
-  {
-    id: 6,
-    category: "family",
-    title: "When Should Your Child See a Specialist?",
-    summary: "Pediatricians can handle most issues, but some symptoms warrant a specialist visit. Here's what to watch for at every age.",
-    source: "AAP",
-  },
-  {
-    id: 7,
-    category: "medication",
-    title: "Generic vs. Brand-Name: What's the Real Difference?",
-    summary: "Generic drugs can save you 80-85% on costs. The FDA requires them to work the same way — here's what that means for you.",
-    source: "FDA",
-  },
-];
+interface Article {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  url: string;
+  provider: "NewsAPI" | "MedlinePlus";
+}
+
+const SkeletonCard = () => (
+  <div className="glass-card rounded-xl p-4 animate-pulse">
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1 space-y-2">
+        <div className="h-3.5 bg-muted rounded w-3/4" />
+        <div className="h-3 bg-muted rounded w-full" />
+        <div className="h-3 bg-muted rounded w-5/6" />
+        <div className="h-5 bg-muted rounded w-20 mt-2" />
+      </div>
+      <div className="h-4 w-4 bg-muted rounded shrink-0 mt-1" />
+    </div>
+  </div>
+);
 
 const Resources = () => {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = articles.filter((a) => {
-    const matchesCategory = activeCategory === "all" || a.category === activeCategory;
-    const matchesSearch =
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    fetch(`http://localhost:3001/api/articles?category=${activeCategory}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Server error");
+        return res.json();
+      })
+      .then((data) => {
+        setArticles(data.articles || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("Could not load articles. Make sure the server is running.");
+        setLoading(false);
+      });
+  }, [activeCategory]);
+
+  const filtered = articles.filter(
+    (a) =>
       !search ||
       a.title.toLowerCase().includes(search.toLowerCase()) ||
-      a.summary.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+      a.summary.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Health Resources</h1>
-        <p className="text-sm text-muted-foreground mt-1">Browse trusted health articles by topic</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Browse trusted health articles from NewsAPI and MedlinePlus
+        </p>
       </div>
 
       {/* Search */}
@@ -116,28 +109,47 @@ const Resources = () => {
 
       {/* Articles */}
       <div className="space-y-3">
-        {filtered.map((article) => (
-          <article
+        {loading && Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+
+        {error && (
+          <div className="text-center py-8 text-muted-foreground">
+            <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && filtered.map((article) => (
+          <a
             key={article.id}
-            className="glass-card rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer group"
+            href={article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="glass-card rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer group block"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">
                   {article.title}
                 </h3>
-                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
                   {article.summary}
                 </p>
-                <span className="inline-block mt-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <span
+                  className={`inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-full ${
+                    article.provider === "MedlinePlus"
+                      ? "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40"
+                      : "text-primary bg-primary/10"
+                  }`}
+                >
                   {article.source}
                 </span>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary transition-colors" />
+              <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary transition-colors" />
             </div>
-          </article>
+          </a>
         ))}
-        {filtered.length === 0 && (
+
+        {!loading && !error && filtered.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No articles found. Try a different search or category.</p>
