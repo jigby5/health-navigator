@@ -1,11 +1,6 @@
-// Some notes:
 /**
-right now it has a user hard coded so we can see how it works, once we add the ability
-for users to log in we will need to change that. 
-Right now every transaction displays the
-same copay amount copayAmount so if the database later has variable prices, this code
-would not reflect that correctly.
-Right now there is no pagination 
+ * Past transactions use the signed-in user. Copay is taken from the enrolled plan catalog;
+ * per-visit amounts are not stored on appointments yet.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,6 +9,7 @@ import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AppointmentTransaction {
   appt_id: number;
@@ -24,16 +20,25 @@ interface AppointmentTransaction {
   } | null;
 }
 
-// hard coded user until we have users log in and use their info
-const CHAD_USER_ID = 1;
-
 const Transactions = () => {
+  const { user } = useAuth();
+  const userId = user?.user_id;
+
   const [transactions, setTransactions] = useState<AppointmentTransaction[]>([]);
-  const [copayAmount, setCopayAmount] = useState(0);
-  const [remainingBalance, setRemainingBalance] = useState(0);
+  /** Null when user has no plan row (should be rare on this route). */
+  const [copayAmount, setCopayAmount] = useState<number | null>(null);
+  const [remainingBalance, setRemainingBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (userId == null) {
+      setTransactions([]);
+      setCopayAmount(null);
+      setRemainingBalance(null);
+      setLoading(false);
+      return;
+    }
+
     const fetchTransactions = async () => {
       setLoading(true);
 
@@ -41,14 +46,14 @@ const Transactions = () => {
         supabase
           .from("appointments")
           .select("appt_id, date_time, healthcare_providers(full_name, facility_name)")
-          .eq("user_id", CHAD_USER_ID)
+          .eq("user_id", userId)
           .eq("status", "completed")
           .order("date_time", { ascending: false }),
         supabase
           .from("insurance_plans")
           .select("remaining_balance, insurance_plan_catalog(copay_amount)")
-          .eq("user_id", CHAD_USER_ID)
-          .single(),
+          .eq("user_id", userId)
+          .maybeSingle(),
       ]);
 
       if (appointmentsResult.error) {
@@ -68,21 +73,29 @@ const Transactions = () => {
           description: planResult.error.message,
           variant: "destructive",
         });
+        setCopayAmount(null);
+        setRemainingBalance(null);
+      } else if (planResult.data) {
+        const catalog = planResult.data.insurance_plan_catalog as { copay_amount?: number } | null;
+        setCopayAmount(catalog?.copay_amount ?? 0);
+        setRemainingBalance(planResult.data.remaining_balance ?? null);
       } else {
-        setCopayAmount(planResult.data?.insurance_plan_catalog?.copay_amount ?? 0);
-        setRemainingBalance(planResult.data?.remaining_balance ?? 0);
+        setCopayAmount(null);
+        setRemainingBalance(null);
       }
 
       setLoading(false);
     };
 
-    fetchTransactions();
-  }, []);
+    void fetchTransactions();
+  }, [userId]);
 
-  const totalPaid = useMemo(
-    () => transactions.length * copayAmount,
-    [transactions.length, copayAmount],
-  );
+  const totalPaid = useMemo(() => {
+    if (copayAmount == null) {
+      return null;
+    }
+    return transactions.length * copayAmount;
+  }, [transactions.length, copayAmount]);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
@@ -105,7 +118,9 @@ const Transactions = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="glass-card rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Total paid</p>
-          <p className="text-xl font-bold text-foreground">${totalPaid.toFixed(2)}</p>
+          <p className="text-xl font-bold text-foreground">
+            {totalPaid == null ? "—" : `$${totalPaid.toFixed(2)}`}
+          </p>
         </div>
         <div className="glass-card rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Transactions</p>
@@ -113,7 +128,9 @@ const Transactions = () => {
         </div>
         <div className="glass-card rounded-xl p-4">
           <p className="text-xs text-muted-foreground">Remaining balance</p>
-          <p className="text-xl font-bold text-foreground">${remainingBalance.toFixed(2)}</p>
+          <p className="text-xl font-bold text-foreground">
+            {remainingBalance == null ? "—" : `$${remainingBalance.toFixed(2)}`}
+          </p>
         </div>
       </div>
 
@@ -148,8 +165,14 @@ const Transactions = () => {
               </div>
 
               <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
-                <DollarSign className="w-4 h-4" />
-                {copayAmount.toFixed(2)}
+                {copayAmount == null ? (
+                  "—"
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4" />
+                    {copayAmount.toFixed(2)}
+                  </>
+                )}
               </div>
             </div>
           ))}
