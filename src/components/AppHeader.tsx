@@ -15,6 +15,9 @@ const AppHeader = () => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout } = useAuth();
+  const accountLabel = user
+    ? `Signed in as ${[user.first_name, user.last_name].filter(Boolean).join(" ").trim() || user.email}`
+    : "Logged out";
 
   return (
     <header className="sticky top-0 z-50 bg-card/90 backdrop-blur-md border-b border-border">
@@ -40,6 +43,7 @@ const AppHeader = () => {
               {item.label}
             </Link>
           ))}
+          <span className="text-xs text-muted-foreground px-2">{accountLabel}</span>
           {user ? (
             <Button variant="outline" size="sm" onClick={logout}>
               Log Out
@@ -61,6 +65,7 @@ const AppHeader = () => {
 
       {menuOpen && (
         <nav className="md:hidden border-t border-border bg-card animate-fade-in">
+          <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/50">{accountLabel}</div>
           {navItems.map((item) => (
             <Link
               key={item.path}

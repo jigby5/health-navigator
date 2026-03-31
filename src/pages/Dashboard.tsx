@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getAvailableTimeSlotLabels,
@@ -93,6 +94,9 @@ const Dashboard = () => {
   const [enrollmentPlan, setEnrollmentPlan] = useState<EnrollmentPlan | null>(null);
   const [doctorBlocks, setDoctorBlocks] = useState<ScheduleBlockRow[]>([]);
   const [doctorBusyAppointments, setDoctorBusyAppointments] = useState<BusyAppointment[]>([]);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const loadDoctorAvailability = async (doctorId: number) => {
     const [blocksRes, apptsRes] = await Promise.all([
@@ -320,7 +324,17 @@ const Dashboard = () => {
 
   const openAppointmentDetails = (appt: Appointment) => {
     setSelectedAppt(appt);
+    setNotesDraft(appt.user_notes ?? "");
+    setEditingNotes(false);
     setAppointmentDetailsOpen(true);
+  };
+
+  const handleAppointmentDetailsOpenChange = (open: boolean) => {
+    setAppointmentDetailsOpen(open);
+    if (!open) {
+      setEditingNotes(false);
+      setNotesDraft("");
+    }
   };
 
   const openScheduleDialog = () => {
@@ -528,6 +542,44 @@ const Dashboard = () => {
     toast({
       title: "Appointment cancelled",
       description: "Your appointment has been cancelled.",
+    });
+  };
+
+  const handleSaveNotes = async () => {
+    if (!selectedAppt) return;
+
+    setSavingNotes(true);
+
+    const trimmedNotes = notesDraft.trim();
+    const { data, error } = await supabase
+      .from("appointments")
+      .update({ user_notes: trimmedNotes.length > 0 ? trimmedNotes : null })
+      .eq("appt_id", selectedAppt.appt_id)
+      .select("appt_id, date_time, doctor_id, status, user_notes, healthcare_providers(full_name, facility_name, specialty)");
+
+    setSavingNotes(false);
+
+    if (error) {
+      console.error("Error updating appointment notes:", error);
+      toast({
+        title: "Couldn't save notes",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const updated = data[0] as unknown as Appointment;
+      setAppointments((prev) => prev.map((a) => (a.appt_id === updated.appt_id ? updated : a)));
+      setSelectedAppt(updated);
+      setNotesDraft(updated.user_notes ?? "");
+    }
+
+    setEditingNotes(false);
+    toast({
+      title: "Notes updated",
+      description: "Appointment notes were saved.",
     });
   };
 
@@ -816,7 +868,7 @@ const Dashboard = () => {
       </Dialog>
 
       {/* Appointment Details Dialog */}
-      <Dialog open={appointmentDetailsOpen} onOpenChange={setAppointmentDetailsOpen}>
+      <Dialog open={appointmentDetailsOpen} onOpenChange={handleAppointmentDetailsOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Appointment</DialogTitle>
@@ -830,10 +882,41 @@ const Dashboard = () => {
 
           {selectedAppt && (
             <div className="space-y-3">
-              {selectedAppt.user_notes && (
-                <div className="rounded-lg border border-border bg-card px-3 py-2">
+              {editingNotes ? (
+                <div className="space-y-2 rounded-lg border border-border bg-card px-3 py-2">
                   <p className="text-xs font-medium text-muted-foreground">Notes</p>
-                  <p className="text-sm text-foreground mt-1 break-words">{selectedAppt.user_notes}</p>
+                  <Textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="Add appointment notes"
+                    rows={4}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setNotesDraft(selectedAppt.user_notes ?? "");
+                        setEditingNotes(false);
+                      }}
+                      disabled={savingNotes}
+                    >
+                      Cancel
+                    </Button>
+                    <Button className="flex-1" onClick={handleSaveNotes} disabled={savingNotes}>
+                      {savingNotes ? "Saving..." : "Save notes"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="rounded-lg border border-border bg-card px-3 py-2 cursor-text"
+                  onClick={() => setEditingNotes(true)}
+                >
+                  <p className="text-xs font-medium text-muted-foreground">Notes</p>
+                  <p className="text-sm text-foreground mt-1 break-words">
+                    {selectedAppt.user_notes?.trim() ? selectedAppt.user_notes : "Click to add notes"}
+                  </p>
                 </div>
               )}
 
