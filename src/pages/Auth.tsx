@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { Heart, LoaderCircle } from "lucide-react";
+import { Heart, LoaderCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,17 +133,25 @@ const Auth = () => {
             </div>
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Easy Health</p>
-              <h1 className="text-3xl font-bold text-foreground">Log in to manage your care</h1>
+              <h1 className="text-3xl font-bold text-foreground">Healthcare doesn't have to be <span className="text-primary">confusing.</span></h1>
             </div>
           </div>
 
-          <div className="space-y-4 text-muted-foreground">
-            <p>
-              Create an account to save your profile, appointments, balances, and coverage details in the database.
-            </p>
-            <p>
-              The AI assistant stays open to everyone, but the dashboard, profile, and resources pages now require a login.
-            </p>
+          <div className="space-y-5 text-muted-foreground">
+            <p className="text-sm">A free account unlocks tools designed to save you time, money, and stress.</p>
+            <ul className="space-y-3">
+              {[
+                "Personalized dashboard tracking your appointments & balance",
+                "AI assistant tailored to your specific insurance plan",
+                "Health tips curated for your age and medical history",
+                "Secure storage of your medical profile in one place",
+              ].map((benefit) => (
+                <li key={benefit} className="flex items-start gap-2.5 text-sm text-foreground">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  {benefit}
+                </li>
+              ))}
+            </ul>
             <div className="rounded-2xl bg-card/80 p-4 text-sm text-foreground">
               Demo account: <span className="font-medium">chad@example.com</span>
               <br />
