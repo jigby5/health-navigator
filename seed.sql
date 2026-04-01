@@ -4,7 +4,7 @@
 -- Users
 INSERT INTO public.users (user_id, email, password_hash, first_name, last_name, role, health_profile, total_balance_due, total_copay_amounts)
 VALUES
-(1, 'chad@example.com', '2b915e4cf1f2e1d650abf106931a85c4cd3ec49a381d0acb006db43ef9988063', 'Chad', 'Johnson', 'user', 'No known allergies. Peanut sensitivity.', 67.00, 25.00),
+(1, 'chad@example.com', '2b915e4cf1f2e1d650abf106931a85c4cd3ec49a381d0acb006db43ef9988063', 'Chad', 'Johnson', 'user', 'No known allergies. Peanut sensitivity.', 0.00, 25.00),
 (2, 'admin@example.com', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'Admin', 'User', 'admin', NULL, 0, 0);
 
 -- Insurance Providers (4 carriers; 3 catalog plans each in insurance_plan_catalog)
@@ -33,7 +33,7 @@ VALUES
 
 -- Chad's enrollment (catalog plan 1 = InterHills Gold HMO)
 INSERT INTO public.insurance_plans (plan_id, user_id, catalog_plan_id, remaining_balance) VALUES
-(1, 1, 1, 67.00);
+(1, 1, 1, 0.00);
 
 -- Healthcare Providers (Doctors)
 INSERT INTO public.healthcare_providers (doctor_id, full_name, specialty, facility_name) VALUES
